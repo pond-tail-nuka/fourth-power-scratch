@@ -16,7 +16,7 @@
 3. セッションの直前状態は forge に存在 MUST。セッション中断・マシン消失後に復元できること (§7 の復元手順で検証 MUST)。
 4. マージ可能性は CI が決める MUST。ローカルで green でも CI が green でなければマージ MUST NOT。
 5. forge の読み書きは `src/forge.mjs` のみ MUST。src 配下に stateful な永続化 (DB, fs state, local lock) を保持して MUST NOT (CI check `no-state`、framework repo の PR に required)。`scripts/bootstrap.mjs` の forge 書込みは setup 時 (bootstrap 実行) のみ許容し、`src/` からの bootstrap import は MUST NOT (no-state が拒否)。
-6. orchestrator の全設定 (label 正式名、`accept` job 名、budget cap、cohort ラベル、workflow 名、復元 scan 条件、seat モデル割当と階層 (`seatTiers`)、context 予算上限、forge provider 単一選択、exempt・権限ラベル一覧、human login 一覧 (`humanAccounts`)、canonical bot 識別 (check issuer)、turn 打切り間隔、mergeable 再照合間隔) は framework リポジトリの `docs/governance/config.json` (既定) + `projects.json` (プロジェクト毎上書き) に MUST 保持。プロジェクト本体のリポジトリに設定をコミ MUST NOT (本体コードと設定を依存させない)。プロジェクト側は bootstrap の materialize (label・protection・workflow) のみで、設定のコピーは持たない。CI check `config-consistency` が framework 設定と project の実状態 (label 名・protection・workflow) を照合し、乖離は fail MUST。config の読取は provider の API 経由 MUST (framework repo の read 権限は bootstrap が project CI に付与するか framework repo を readable にする)。ローカルの config/env (秘密の token を除く) で状態を代用 MUST NOT。
+6. orchestrator の全設定 (label 正式名、`accept` job 名、budget cap、cohort ラベル、workflow 名、復元 scan 条件、seat モデル割当と階層 (`seatTiers`) と verifier 下限階層 (`verifierMinTier`)、context 予算上限、forge provider 単一選択、exempt・権限ラベル一覧、human login 一覧 (`humanAccounts`)、canonical bot 識別 (check issuer)、turn 打切り間隔、mergeable 再照合間隔) は framework リポジトリの `docs/governance/config.json` (既定) + `projects.json` (プロジェクト毎上書き) に MUST 保持。プロジェクト本体のリポジトリに設定をコミ MUST NOT (本体コードと設定を依存させない)。プロジェクト側は bootstrap の materialize (label・protection・workflow) のみで、設定のコピーは持たない。CI check `config-consistency` が framework 設定と project の実状態 (label 名・protection・workflow) を照合し、乖離は fail MUST。config の読取は provider の API 経由 MUST (framework repo の read 権限は bootstrap が project CI に付与するか framework repo を readable にする)。ローカルの config/env (秘密の token を除く) で状態を代用 MUST NOT。
 
 ## 3. 状態機械
 
@@ -24,6 +24,7 @@
 stateDiagram-v2
     [*] --> backlog
     backlog --> blocked/spec-gap: 条項なし Issue の検出 (claim 前に fail 判定)
+    backlog --> blocked/budget: plan turn の budget cap 超過 (お題 Issue の plan turn のみ、§5・§7)
     backlog --> claimed: agent が claim (ラベル + claim コメント)
     claimed --> claimed: PR 作成・fix turn (CI red / draft の間は claimed 維持)
     claimed --> in_review: PR ready + CI green (verifier turn 通過込み、§8)
@@ -48,7 +49,7 @@ stateDiagram-v2
 
 - blocked ラベルは原因別に MUST 分離: `blocked/spec-gap` `blocked/budget` `blocked/infra`。M2 の統計は原因別集計を MUST 可能とする。
 - claim 競合は同一ラベルの重複コメントで解決 MUST。勝者の判定は **forge API の created_at の先頭** MUST (comment 本文の `at <iso-time` は created_at と突合され、不一致は claim 成立 MUST NOT — 自己申告時刻による偽装は created_at が正とする)。created_at が同一秒のケースは競合として扱い、後から着いた claim は MUST 却下 (勝者は 1 つのみ)。comment edit・削除は fixture 回帰テストで挙動を固定 MUST (claim comment の edit は MUST 不可、書き直しは新 comment のみ)。解決時、敗者にはコメントで通知し敗者の claim コメントを残す MUST (台帳は §7 の式で session-id 単位、敗者コメントは winner の台帳に算入しない)。
-- 再 triage (blocked→backlog) は人間操作 MUST で、操作時に (a) 旧 claimed ラベルを全削除、(b) 未マージ PR を close、(c) claim 競合の scan 窓を「再 triage 以降の claim」に MUST 絞り込み (旧 claim は勝者候補から除外、§7)。再 triage 自体が介入 (§9) で、done 到達経験はリセットされる。
+- 再 triage (blocked→backlog) は人間操作 MUST で、操作時に (a) 旧 claimed ラベルを全削除、(b) 未マージ PR を close、(c) claim 競合の scan 窓を「再 triage 以降の claim」に MUST 絞り込み (旧 claim は勝者候補から除外、§7)、(d) お題 Issue の再 triage では plan turn の無効化 MUST (claim 不可) と、マージ済み plan PR から起票された child Issue の close MUST (介入算入、§9)。再 triage 自体が介入 (§9) で、done 到達経験はリセットされる。再 claim 禁止の例外: お題自身の re-claim は MAY (§7)。
 - done 遷移: orchestrator はマージ成立時、先に `done` ラベル MUST 付与、その後に Issue を close MUST。PR 本文に `Closes #N` keyword を MUST 書かない (gate が本文を scan して拒否)。provider の auto close に依存 MUST NOT (done ラベル欠落の残存状態が生じる)。auto close してしまった場合は gate が done ラベル付与で MUST 是正。マージ成立・close 未実行のクラッシュ中間状態は done ラベルの有無で状態が決まる (§7 の決定表行)。
 - 未マージの PR close はセッション放棄とみなす (介入、§9)。復元では PR 無しとして扱う (§7)。
 - rebase turn も budget に算入 MUST (台帳は §7 の式)。
@@ -65,10 +66,10 @@ stateDiagram-v2
 
 ### 4.3 完了の定義
 - job `accept` の green が「完了」の定義 MUST。green でない PR は in_review に遷移 MUST NOT。
-- 受け入れ条項を持たない Issue は claim MUST NOT (→ `blocked/spec-gap` で人間に委譲)。
+- 受け入れ条項を持たない Issue は claim MUST NOT (→ `blocked/spec-gap` で人間に委譲。ただし body に可視 header `plan:` を持つお題 Issue は例外とし、plan turn の起動対象とする (§5・§7)。`blocked/spec-gap` への遷移自体は §3 の決定論を維持する)。
 
 ### 4.4 bootstrap 順序
-- `scripts/bootstrap.mjs` が label・branch protection・`accept` ワークフローを冪等 に setup MUST。冪等性と、setup 後の protection 状態アサーションを MUST 持つ: required check 名が §8 の一覧と一致、承認数が config.json の値、`dismiss_stale_reviews` が有効 (GitHub の head SHA 変更 dismiss)、`enforce_admins` が true、 orchestrator token が admin 権限を持たないこと (protection 変更不可)。bootstrap は config.json の cap 数値・tier path 一覧・`seatTiers`・`humanAccounts`・required 一覧の存在もアサーション MUST (欠落は setup MUST fail)。
+- `scripts/bootstrap.mjs` が label・branch protection・`accept` ワークフローを冪等 に setup MUST。冪等性と、setup 後の protection 状態アサーションを MUST 持つ: required check 名が §8 の一覧と一致、承認数が config.json の値、`dismiss_stale_reviews` が有効 (GitHub の head SHA 変更 dismiss)、`enforce_admins` が true、 orchestrator token が admin 権限を持たないこと (protection 変更不可)。bootstrap は config.json の cap 数値・tier path 一覧・`seatTiers`・`verifierMinTier` (階層上限の充足含む)・`humanAccounts`・required 一覧の存在もアサーション MUST (欠落は setup MUST fail)。
 - Issue 作成前に `accept` ワークフローが存在 MUST (bootstrap が先行)。
 
 ### 4.5 品質担保・vacuous テスト禁止
@@ -82,6 +83,8 @@ stateDiagram-v2
 - 仕様は `docs/spec.md` に MUST 集約し、normative な変更は spec PR (人間レビュー済み) → マージ後にのみ許容。
 - Issue は spec のマージから導出 MUST。Issue 本文に spec 条項参照 (`spec §x.y`) を MUST 持つ。
 - Issue 本文は固定テンプレート: 受け入れ条項 (`accept:<id>`) + scope (対象ファイルと non-goals) を MUST 持つ。実装 turn は scope を超えた repo 全体 scan を MUST NOT (verifier の読みスライス指定のみ例外)。turn 組立は参照条項のみ添付 MUST で spec 全文を payload に MUST NOT 含める。scope 宣言は PR の changed paths と照合される (deterministic check `scope-guard`、§4.1 — 宣言外ファイル変更は fail)。
+- お題 Issue (オーケストレータによる自律分解) は plan turn を MAY とし設計上 MUST 許容: 可視 header `plan:` + 人間のお題本文 (author ∈ `humanAccounts` MUST。お題の原文のみを本文に置く) を持つ Issue を指す。orchestrator は `plan:` Issue に対して plan turn (MAY) を起動し、分解案 (spec 条項・accept 条項・child Issue・plan PR の差分) を `docs/plan/` の PR に起草 MUST。plan PR は tier high MUST (§8 — 承認ゲート = 分解への人間の判断)。child Issue は plan PR のマージ後にのみ起票 MUST: author = `botActor` MUST、本文は plan PR 差分からの機械的組立 MUST (spec 条項参照・`accept:<id>`・scope 宣言のみで自由文を本文に MUST NOT。§5 の固定テンプレートと `scope-guard` は child Issue にも成立し、accept 本文は受入契約の gate を通過した内容のみを写す)。plan PR が close された場合 child Issue は残さない (状態が残存しない)。お題 Issue は claim MUST NOT (plan turn のみ。plan turn の session-id は §12 の hidden key `<!-- fp:session <session-id> -->` と可視 header `plan <session-id>` の固定 comment に保持し、台帳は §7 の author・session-id 突合で数える)。
+- peer query: agent は他 Issue (お題 Issue・関連 PR) へ query comment を発行 MAY。この comment は agent 著者であり、turn への再取込は要約のみ (§5 の agent 著者規定は変更せず、gate 判定入力・台帳不算入・hidden 禁止はそのまま)。
 - プロンプトインジェクション: Issue 本文は信頼できる人間入力のみ MUST。agent 著者コメントは再取込時に要約のみ MAY。PR 差分由来の外部コンテンツを turn に MUST 混ぜない。**人間の同一性は `humanAccounts` (§2.6 の一覧) で決定 MUST**: Issue 本文編集・再 triage・承認は author が一覧に属する login のみ有効。一覧外 author の本文・コメント編集は turn に取り込まない (gate MUST 無視)。orchestrator の token アカウントを `humanAccounts` に登録 MUST NOT (bootstrap が同一性照合で拒否、§4.4)。
 
 ## 6. adapter 契約 (normative)
@@ -113,6 +116,7 @@ stateDiagram-v2
   復元 scan の勝者判定は scan 窓内の created_at 先頭 (§3) MUST で、復元セッションは **勝者の session-id を継承 MUST** (新 id を採らない — 新 id は re-claim とみなし budget 算入、claim コメント header は `claimed <同 id> at <元 created_at> resumed <iso-time>` に更新して created_at は改変しない)。復元 turn の読みは claim header・直近の要約 comment・PR/CI 状態のみ MUST (comment thread 全読 MUST NOT。gate 判定は §8 の再照合で API 個別フィールドを読む)。要約 comment は orchestrator が書く決定論的台帳記録 (永続側、§2.1・§6) で、実行中間ログは復元に入れない。
 - claim コメント書式は MUST 固定: `claimed <session-id> at <iso-time>` に `<!-- fp:session <session-id> -->` を MUST 併記 (可視 header は fallback と機械 scan の両者で使う、§12)。`at <iso-time>` は MUST API の created_at 正規値から gate (src/forge.mjs) が書く (session-id・timestamp の任意 lines を Action body で許容しない — 偽造は created_at 突合で却下、§3)。復元 scan も config.json / projects.json の条件から決定 MUST (§2.6)。
 - budget 超過は `blocked/budget` MUST。台帳は forge の normalized リソースにのみ存在する。
+- plan turn の起動は決定論 MUST: scan が `plan:` header を起動トリガーとして読む (LLLM の判断で起動・却下を選択しない)。plan turn の budget・台帳は §7 の既存計算をそのまま使う (cap 超過で `blocked/budget` を付与 MUST — §3 の budget 遷移がそのまま成立し、新ラベルを置かない)。PR のマージ可能性判定に plan turn は関与しない。plan turn の payload も `contextBudget` の上限対象 MUST (§6)。
 
 ## 8. ゲート (normative)
 
@@ -131,17 +135,19 @@ stateDiagram-v2
 
 ## 9. 計測 (normative)
 
-- `scripts/metrics.mjs` が自律マージ率を算出 MUST。介入の定義: 人間による (a) `blocked/*`→`backlog` の再 triage、(b) Issue 本文の `accept:<id>` 条項・`ci/accept/` の編集、(c) 再 claim。**review 承認は gate 所定であり介入不算入**。
+- `scripts/metrics.mjs` が自律マージ率を算出 MUST。介入の定義: 人間による (a) `blocked/*`→`backlog` の再 triage、(b) Issue 本文の `accept:<id>` 条項・`ci/accept/` の編集、(c) 再 claim、(d) plan PR の merge と close (plan PR のマージ/クローズは人間の判断なので介入 — これは「ゲート承認」で §9 の「review 承認不算入」には該当しない、§8 の tier high は設計上の区別)。お題の再 triage も介入 (§3)。お題チェーンの close = 撤回意味 (child Issue の close = 分解案の取消し、§3)。分母 = チェーンの Issue 数。**review 承認は gate 所定であり介入不算入**。
 - 分子: 介入行動が 0 の Issue で done 到達した数 (判定は history の介入行動種のみで数える — コメントパターン依存を MUST 排除: verifier comment・gate 承認・敗者 claim・台帳行は介入ではない、§8・§9 の定義に一致する行動だけ介入として数える)。分母: 対象 cohort のうち done / blocked に到達した全 Issue 数。
 - cohort 定義は Issue ラベル `cohort:typical` で MUST 表現し、率の分母・分子は forge の normalized 状態から決定 MUST。ローカル集計 MUST NOT。`cohort:typical` の付与は人間・bootstrap のみ MUST (gate の self 付与拒否、§8。tier 既定 high と併せて水増しを塞ぐ、§8)。
 - M3 の目標 80% は、metrics.mjs の出力に対して評価する (verifier seat が heterogen な構成で測定 MUST、§8)。low tier の承認なしマージ (§8) は承認を要する PR を減らす (承認は介入不算入のまま、分子の定義はコメントパターンに依存しない)。
+- お題から done への自律率は metrics.mjs の MAY 出力とする (M4 の測定対象、§10。お題チェーンの介入 (d) は plan PR の記録に立つもので、child Issue の記録は (a)(b)(c)のみで判定する)。
 
 ## 10. マイルストーン受け入れ
 
 - M0: spec PR が人間レビュー済みで main にマージ済み MUST。bootstrap の冪等 setup と protection アサーション (§4.4 の全項目: required 一覧一致・承認数・`dismiss_stale_reviews`・`enforce_admins`・admin token 非確認・config 欠落 fail)、§8 の required check 全一覧 (`accept` job と §4.1 の独立 check 群 8 種) が scratch project で稼働 MUST。
 - M1: scratch repo + Issue 1 本で全ループを forge provider (初期 GitHub) 実測。クローン破棄→再クローン復元を検証 MUST。CI red・承認なしでのマージ阻止 — green fixture だけでなく、`accept-immutable` (accept 改変) と `accept-vacuity` (vacuous file 注入) の red 実測も MUST。claim 重複検出 (created_at 不一致却下込み、§3) の fixture 回帰 MUST。mutation red 検証 (§4.5 の scratch revert で red 確認) MUST。
 - M2: 単一ループ安定化 — 1 Issue = 1 セッション (単一ループ、複数 persona のエスカレーション強制は持たない)。決定表テスト (gate/resume/budget) + fixtures + 原因別 blocked 統計が CI で green MUST。以下の回帰ケースを MUST 含む: (a) 台帳の session-id 単位集計と敗者コメント混入 (author 突合含む)、(b) 承認未着の resume 行 (submit turn が review 依頼のみ)、(c) `accept-author` exempt の通過/拒否と権限ラベル self-付与の gate 拒否、(d) metrics の介入判定式 (承認は介入不算入)、(e) verifier 別セッションコメントの台帳不算入と open thread の merge 阻止、(f) 承認後の新 commit での再 review、(g) `risk-tier` の changed paths + 承認記録判定 (high 昇格・low 免除)、(h) `status-exclusivity` のラベル乖離注入 fail、(i) `config-consistency` と `no-state` の乖離・書込経路注入 fail、(j) 定数アサーションの `accept-vacuity` fail、(k) contextBudget 上限超過の間引き挙動、(l) 非 canonical issuer の同名 check 投稿の無視と stale 再照合 fail (§8)、(m) 再 triage 後の再 claim で勝者 session-id 継承と claim header 更新 (created_at 不改変、§7)、(n) `scope-guard` の scope 宣言外変更 fail、(o) claim comment の created_at 不一致 (timestamp 偽造) の却下 (§3)。選択 provider の決定表 fixture MUST 通過 (§11 の conformance bullet・緩和: プロジェクトの選択 provider のみ)。hidden marker の raw 永続と API fallback (§12) も回帰 MUST に含む。runtime provider × seat の録画 conformance suite (しきい値 99/100) も MUST 通過。
-- M3: low tier (cohort:typical) は承認なしでマージできる設定へ移行済み MUST — protection の承認数を 0 へ bootstrap が切替 MUST (§8・§4.4。高 tier の承認要求は `risk-tier` が承認記録読取で維持)。metrics.mjs による cohort:typical の自律マージ率 80% 以上 MUST (heterogen seat 構成での測定、§9)。GitLab provider を選択したプロジェクトは全ループ実測 + クローン破棄復元検証 MUST (fixture のみでなく実測)。`sha-approval` の再照合 (push 後の承認無効) と `status-exclusivity` fallback の fixture MUST 通過 (選択 provider の conformance は §11 の conformance bullet)。
+- M3: low tier (cohort:typical) は承認なしでマージできる設定へ移行済み MUST — protection の承認数を 0 へ bootstrap が切替 MUST (§8・§4.4。高 tier の承認要求は `risk-tier` が承認記録読取で維持)。metrics.mjs による cohort:typical の自律マージ率 80% 以上 MUST (heterogen 測定 MUST — heterogen は実装 seat が flash tier 以下かつ verifier seat が上位階層のこと (`seatTiers` の階層順と上限と `verifierMinTier` key、§2.6。§6 の heterogen 規定「実装 seat は flash tier、verifier は上位」の失効防止 — 「flash + 同 flash」測定を禁止)。`verifierMinTier` 設定が未充足なら setup MUST fail (§4.4 の bootstrap アサーション、§6 の conformance setup fail は階層上限まで網羅済み)。GitLab provider を選択したプロジェクトは全ループ実測 + クローン破棄復元検証 MUST (fixture のみでなく実測)。`sha-approval` の再照合 (push 後の承認無効) と `status-exclusivity` fallback の fixture MUST 通過 (選択 provider の conformance は §11 の conformance bullet)。
+- M4: お題実測 — 人間のお題 1 本 (`plan:` header、author ∈ `humanAccounts`) で plan turn の分解案 (plan PR、tier high) を実測 MUST。plan PR マージ後の child Issue 起票→自律 claim→merge→done の連鎖を fixture のみでなく実測 MUST (spec §5)。お題チェーンの自律率 (child Issue の (a)(b)(c) 介入 0 で done 到達 / チェーンの Issue 数) を metrics.mjs が出力 MAY (spec §9)。plan PR close 時の child Issue 残存なし (§3 の撤回意味) も回帰 MUST。お題 Issue の再 triage で plan turn 無効化と child Issue close の連鎖を fixture 回帰 MUST。
 
 ## 11. Forge object model (normative)
 
@@ -168,6 +174,7 @@ stateDiagram-v2
 - tier path (§8): `tiers.highPaths` は provider 固有表記 MUST (GitHub `.github/workflows/`、GitLab `.gitlab-ci.yml` と `include:` 先ファイル)。GitLab の path ベース承認 (Code Owners) は Premium 限定なので、tier 判定は `risk-tier` check で MUST 担保 (free でも動く)。
 - provider conformance (緩和): 選択 forge provider の決定表 fixture MUST 通過。2 provider (GitHub / GitLab) 両方の conformance 維持は RECOMMENDED な拡張で、プロジェクトのスコープは選択 forge provider のみ (この bullet 自身・§10 M2)。未通過の forge provider は本番利用 MUST NOT。
 - Plan / PlanGroup は読み取らない: scan は label・note・checks のみ (§7)。
+- milestone / epic の全体完了合意手順は spec で規定しない (人間または skill の版付き合意と時間切れ ≠ 合格の手順による。PROPOSAL §15)。
 
 ## 12. Hidden marker (normative)
 

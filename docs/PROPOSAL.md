@@ -124,7 +124,9 @@ submit turn は必ず PR push → gh pr ready → レビュー依頼 → Issue �
 - M0 基盤: `docs/spec.md` の仕様 PR (人間レビュー済み) が main にマージ済みであること。bootstrap の冪等 setup と protection アサーション、`accept` ワークフローが scratch repo で稼働する規定 (spec §10)。
 - M1 walking prototype: scratch repo + Issue 1 本で Issue → claim → PR → CI → マージ → Issue close の全ループを forge provider (初期 GitHub) 実測。クローン破棄 → 再クローンで同じ状態に復元できることと、CI red・承認なしでのマージ阻止、claim 重複検出の fixture 回帰を必須とする (spec §10)。
 - M2 単一ループ安定化: 1 Issue = 1 セッション (複数 persona の多段エスカレーションは持たない)。gate / resume / budget の決定表テスト + `tests/fixtures/` + 原因別 blocked 統計 + adapter conformance が CI で green であることを必須とする。typical Issue の自律マージ率を `scripts/metrics.mjs` で計測。
-- M3 自律率向上: low tier (cohort:typical) は承認なしでマージできる設定に移行し、cohort `cohort:typical` の自律マージ率 80% 以上 (metrics.mjs の定義に準拠、spec §9) を目標にする。高リスク path は承認必須のまま。
+- M3 自律率向上: low tier (cohort:typical) は承認なしでマージできる設定に移行し、cohort `cohort:typical` の自律マージ率 80% 以上 (metrics.mjs の定義に準拠、spec §9) を目標にする。高リスク path は承認必須のまま。heterogen の定義は「実装 seat が flash tier 以下かつ verifier seat が上位階層」に確定 (spec §10 の M3 修正。verifier が flash の構成は測定不能)。
+- M4 お題実測: お題 1 本 (`plan:` header、author は人間) → plan turn が plan PR (`docs/plan/`) に分解案を起草 → 人間の承認 (tier high 設定) → マージ後 child Issue 起票 → 自律 claim→merge→done の連鎖を fixture のみでなく実測 (spec §10)。お題チェーンの自律率 (child Issue の介入 0 で done 到達 / チェーンの Issue 数) は metrics.mjs の optional 出力 (spec §9)。
+- お題モデルの設計: plan PR は tier high 設定 — 承認ゲート = 分解への人間の判断 (spec §5・§8)。child Issue の本文は plan PR 差分からの機械的組立で自由文は禁止 (spec §5)。お題の再 triage は介入算入で child Issue の close も記録される。close = 撤回意味 (spec §3)。お題の merge/close は人間の判断なので介入で、child Issue 側の介入は (a)(b)(c) のみ (spec §9)。plan PR の close 時は child Issue を残さない (spec §5)。
 - テストは provider API JSON (GitHub / GitLab の fixture) のみを input とする決定表として offline で実行でき、walking prototype は scheduled workflow で再現可能な integration test とする。provider conformance (spec §11) は選択 provider の fixture 通過を必須とする規定で、provider 差を決定表の外側に閉じ込む (プロジェクトのスコープは選択 provider のみ)。
 
 ## 9. 決定記録 (旧 未決事項 — 2026-10-30 に両項とも決着)
@@ -286,3 +288,11 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 - B. read-only 投影 CLI `scripts/status.mjs` (M1/M2 スケール): normalized 状態 (label・claim header・PR/CI・hidden summary) からループ表を描画する (行: issue / status / resume 点 / budgetLeft / mergeable 理由)。書込みはしない (src/forge.mjs の read 経路のみ、spec §2.1 の不変条件と一致)。terminal に表 1 枚だけで、ダッシュボードを作らない。
 - C. Web ダッシュボード: 非ゴールのまま (初期スコープ外、PROPOSAL §1 の非ゴール)。B と同じ read モデルの HTML 版であり、M3 後の拡張は選択肢 (RECOMMENDED は M3 到達時に判断する)。状態を別保存しない以上、UI は「読み取り」に限定する。
 - D. turn の実行ログ (中間判断・tool trace) は実行中間物なので UI に流さない (terminal のみ)。forge に写すのは可視 comment と hidden marker のみ。
+
+## 15. 自律目標とお題モデル (決定記録、2026-10-30)
+
+- 自律の目標: 人間の介入はお題設定 1 回のみ、以降は自律稼働 (plan turn の分解 → 人間の承認 → child Issue の自律マージ連鎖)。
+- 参照: AgentPost (https://qiita.com/shyamagu/items/c419cff2c03b544fd877 — 3 チームが郵便受けだけで開発→QA→終了確認を約 23 分で完遂)。本設計との対応: 郵便受け = forge の comment (SSOT 不変条件なので別の郵便受けは不要)。記事の「オーケストレータのコストが上位」批判は LLM オーケストレータが対象で、本プロジェクトの scan・決定表は deterministic code なので該当しない。契約同報 = spec 条項 (仕様先行)。時間切れ ≠ 合格 = §8 の再照合と同じ原則 (「連絡がないことを合格とみなさない」は記事の側)。全体完了合意は版付き合意 + 時間切れは未確認扱い (skill 側の手順。milestone の close 意味は spec で規定しない)。
+- プランニング負荷の移転: agile のプランニングの難所 = 要求と受入条件の作成。お題モデルではこの負荷を「人間が Issue を 1 本ずつ書くこと」から「plan PR の承認」へ移す (spec §5。plan PR の merge/close は介入算入 — 承認 1 回を数える。ただし child Issue の自律率には含めない。child Issue 側の介入は (a)(b)(c) のみ)。
+- accept-first の維持: AgentPost の完遂は「QA エージェントの合意」で、受け入れテストはない。合意は動く (記事の v1 は final_candidate: false で差し戻し)。本設計の完了判定は合意ではなく accept green (spec §4.3)。
+- M4 (spec §10) でお題の実測を規定。お題チェーンの自律率 (child Issue 数に対する done 到達の割合) を metrics.mjs が optional で算出 (spec §9)。
