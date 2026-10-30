@@ -302,3 +302,17 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 - プランニング負荷の移転: agile のプランニングの難所 = 要求と受入条件の作成。お題モデルではこの負荷を「人間が Issue を 1 本ずつ書くこと」から「plan PR の承認」へ移す (spec §5。plan PR の merge/close は介入算入 — 承認 1 回を数える。ただし child Issue の自律率には含めない。child Issue 側の介入は (a)(b)(c) のみ)。
 - accept-first の維持: AgentPost の完遂は「QA エージェントの合意」で、受け入れテストはない。合意は動く (記事の v1 は final_candidate: false で差し戻し)。本設計の完了判定は合意ではなく accept green (spec §4.3)。
 - M4 (spec §10) でお題の実測を規定。お題チェーンの自律率 (child Issue 数に対する done 到達の割合) を metrics.mjs が optional で算出 (spec §9)。
+
+## 16. 実装スキル棚卸し (決定記録、2026-10-31)
+
+- 原則: skill は「手順」 (人間・agent が ものを運ぶ仕方) だけを持つ。状態と判定は deterministic code が持つ — scan・決定表・label 遷移・gate はコードであり、skill はそれを持って持たない (spec §2・§7 の不変条件の再確認)。spec §1 の「手順はプロンプト層・リファランスとして運ぶ」が対応の置き所。
+- skill の置き場: framework repo (`docs/governance/skills/`) に置く。プロジェクト本体に skill をコミしないのは config と同じ原則 (spec §2.6 の設定分離)。
+- 人間側 skill:
+  - `draft-ticket` (Draft ページの裏の手順。直接 gh 操作も同じ手順): gh auth の状態確認 → markdown 起案 → プレビュー・編集 → 起票。契約 (author ∈ humanAccounts・確定版のみ投稿・単一ログイン) は spec §5 の入力契約が持っており、skill 側は差し替え可能 (spec §5 の「固定されるのはこの契約のみ」)。
+  - `retriage` (blocked の人間対応): spec §3 の操作 (a)–(d) を流す (旧 claim のラベル削除・未マージ PR の close・お題の plan turn 無効化と child Issue の close)。判断 (done/blocked の決定・ラベル遷移) は orchestrator の決定表側で、skill は手続きのみ流す (§7)。
+  - `milestone-close` (全体完了合意): 版付き合意 + 時間切れ ≠ 合格の手順。spec §11 が「skill 側の手順」として指す実装先で、最終合意は人間の版付き記録のみ (時間切れを合格と数えない、PROPOSAL §15)。
+- orchestrator 側 skill (手順の運搬のみ、決定論はコード):
+  - `plan-decompose` (plan turn の手順 — spec §5 のお題モデル): 分解案を `docs/plan/` PR に起草。child Issue 本文の機械組立 (spec 条項参照・accept 条項・scope 宣言のみ) は組立ロジック側の仕事で、skill が自由文を本文に混ぜない (spec §5)。
+  - `implement-turn` / `verify-turn`: claim → branch → PR → CI → ready の運搬手順 (seat 割当は config の `seatTiers`、spec §2.6・§6)。verifier は別セッション fresh context (spec §8)。
+- 実装作業 (このフレームワーク自体を組む仕事) のスキル棚卸し: gh 操作 (label・protection・workflow の bootstrap、fixture の起票・コメント)、git (クローン破棄・復元の実演)、node runner + AST 走査 (accept / `accept-vacuity` check)、ACP クライアント (omp session の stdio 起動)、Web クライアント \(Overview の read 投影・markdown レンダリング)、provider API の conformance fixture (録画 JSON)。conformance 自体は deterministic code + fixture で、LLM は持たない (spec §6 のしきい値判定と同じ理由)。
+- 台帳・介入の数字 (metrics.mjs) は手順ではなく計算なので skill 側が持たない (spec §9)。
