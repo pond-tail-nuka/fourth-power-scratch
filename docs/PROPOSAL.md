@@ -355,3 +355,15 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
   - 分解品質: child Issue の done 率、plan PR の一発承認率 (差分なしでの承認)、粒度の過不足 (過剰分解・過小分解の検出)。
 - お題 fixture 群 (`tests/perform/topics/`): P1 ドッグフード mini (framework の機能 1 本 — `status.mjs` の --json 出力追加等、accept green→done)、P2 お題連鎖 (plan: header → plan PR 分解案 → 承認 1 回 → child chain → done)、P3 負群 (条項なし→`blocked/spec-gap`、budget cap 超過→`blocked/budget`、accept-vacuous 注入→red)、P4 クラッシュ復元 (クローン破棄→復元、M1 と同じ手順)。
 - 価値: mock は provider 差の抽象の実証でもある — 3 番目の provider として §11 の conformance suite と対で通り、provider swap が設計上で成立していることの証左になる。
+
+## 18. 実装前の検討事項 — 未決リスト (2026-10-31)
+
+- Issue 本文の機械可読規約: `accept:<id` と `plan:` marker は規定済みだが、本文 clause の機械読取 (accept 条項・参照条項・scope 宣言の区別) の書式が未決。推奨: Issue 本文に fence 付きの機械可読ブロック (accept 条項 JSON) を 1 つ置き、組立側はそこだけ読む。人間がプレビュー・編集した確定版 (spec §5.5 の入力契約) のみを投稿する規定は変わらない。Draft ページの組立ロジックがこのブロックを生成する (LLM・skill は使わない)。
+- マージ方法 (squash vs merge commit) が未規定。推奨: `squash` (履歴直線)。台帳は merge subject を記録 "M" (spec §9) なのでどちらでも成立し、`sha-approval` (§8) はマージ前の head SHA を突合するため影響なし。必要なら config に key を追加する。
+- branch 命名規約が未規定: `llm/issue-<N>-<slug>` 推奨 (claim comment header は spec §7 で定義済み。同一 Issue の並行 claim は決定表が禁止済なので衝突しない)。
+- session id 連携: resume には omp の session id が必要。推奨: 起動時に `--mode json` の出力から session id を取り、claim comment 行へ記録 (forge のみが状態を持つ、spec §2.1 の不変条件に従う)。resume は台帳の session id から行う (spec §5 の resume 手順)。
+- Web の gh auth 詳細: 人間の gh セッション (spec §5.5) の login 手順 (browser flow か token 貼付か) は skill `draft-ticket` 側の手順として未決 (PROPOSAL §16 の harness 側)。秘密 token は gitignore 済みで本体にコミしない (spec §2.6 の「秘密の token を除く」の例外規定による)。
+- M0 の状態メモ: spec PR を人間レビュー済み PR としてマージ "M" (spec §10 M0) に対し、docs 段階の direct commit はこの条件を満たさない。運用: docs 段階は人間が直にレビューした記録 commit とし、M1 稼働からは spec PR として起草し直し PR flow で確定させる (記録の履歴は PR flow で作り直す)。
+- P2 の人間承認模擬 (mock 実行): mock での「承認 1 回」は recording 応答の approve event で模擬する (mock は決定論、spec §10 M5)。
+- turn 打切り「進度停滞検出」の実装: `--mode json` の event 無音 + 時刻測定 (turnTimeoutMin、spec §6)。見かけの判定 (遅いが生きている応答の扱い) は検討事項として、実装時に誤検知範囲を決める。
+- GitLab-specific (M6 選択時) の追加検討: epics API・approval semantics は M6 で spec に追記する (現 spec は §11 の object model 抽象で分離済み)。
