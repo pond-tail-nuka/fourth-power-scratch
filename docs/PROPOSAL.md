@@ -10,7 +10,7 @@
 - 単一ループ: 1 Issue = 1 セッション。ルーター/プランナーの subagent は持たず、手順はプロンプト層・リファランス (spec/受入契約) として運び、オーケストレーションは orchestrator の台帳機械のみ。verifier turn (別セッション fresh context の検証) は残す (spec §8)。
 - 状態の二層: 永続状態 (claim/ChangeRequest/checks/accept 契約) は forge のみ、実行中間物 (ワークスペース・turn ログ) はローカル許容だが復元には使わない設計 (spec §2.1 で MUST NOT 規定)。
 
-非ゴール(初期スコープ外): 複数リポジトリの同時 orchestration、Web ダッシュボード、独自 CI ホスト。複数 persona の多段エスカレーション強制 (TAKT 風の多段ワークフロー、persona 別 LLM 判定) は持たない (M2、spec §10)。
+非ゴール(初期スコープ外): 複数リポジトリの同時 orchestration、独自 CI ホスト。複数 persona の多段エスカレーション強制 (TAKT 風の多段ワークフロー、persona 別 LLM 判定) は持たない (M2、spec §10)。Web UI (Overview / Draft の 2 ページ) は非ゴールでなくスコープ内 (§14。状態の別保存をしない以上、UI は読み取り限定)。
 
 ## 2. 不変条件 (SSOT 不変条件)
 
@@ -282,12 +282,16 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 - 接続順序とスコープ: プロジェクト毎に provider を 1 つバインドし、起動は 1 プロジェクト指定の形 (projects.json の `forge.provider` が単一選択を決める)。M1 実測は GitHub provider。GitLab はプロジェクトが選択したときのみ導入し、その provider の conformance fixture 通過を必須とする (spec §11)。2 provider 両維持 (同一 fixture を双方で通すこと) は RECOMMENDED 指定の拡張で、リポジトリ共有の恒久目標ではなく「両 provider を支える時だけ維持する」 (spec §11 緩和)。
 - 設定の分離: config の出所は framework repo の commit に置き、プロジェクト本体のコード管理と分離する (本体 code は config を読まない。gate・deterministic check・CI もローカル config ファイルを読まず、provider API 経由で framework commit の config を読む、spec §2.6)。本体 repo に設定をコミしないことで、Issue のラベル名・workflow 名・budget cap 変更と code 変更が同一 PR に混ざらない。project 側状態は bootstrap の materialize のみで、CI の `config-consistency` が framework 設定と実状態の乖離を検出する規定 (spec §2.6)。CI 側は framework commit の tree を provider API の raw read (GET contents) で読む RECOMMENDED — CI checkout と commit hash の対応は config-consistency で照合されるため checkout 読みも許容されるが、単一 canonical 読取経路 (API) に寄せるのが無難。
 
-## 14. UI 案 (初期スコープは A と B のみ。normative は持たない)
+## 14. UI (Web はスコープ内。normative は持たない)
 
 - A. forge ネイティブ UI (主): 状態は GitHub / GitLab の UI そのままに見える (label 一覧・claim コメント・PR の checks・承認・thread・milestone)。人間はレビューだけ自 UI ですればよく、追加 UI はゼロ。provider 差も両 provider の UI が埋める。hidden marker は UI では見えないため、人間向けには可視 fallback (claim header・要約 comment) を併記する (spec §12)。
-- B. read-only 投影 CLI `scripts/status.mjs` (M1/M2 スケール): normalized 状態 (label・claim header・PR/CI・hidden summary) からループ表を描画する (行: issue / status / resume 点 / budgetLeft / mergeable 理由)。書込みはしない (src/forge.mjs の read 経路のみ、spec §2.1 の不変条件と一致)。terminal に表 1 枚だけで、ダッシュボードを作らない。
-- C. Web ダッシュボード: 非ゴールのまま (初期スコープ外、PROPOSAL §1 の非ゴール)。B と同じ read モデルの HTML 版であり、M3 後の拡張は選択肢 (RECOMMENDED は M3 到達時に判断する)。状態を別保存しない以上、UI は「読み取り」に限定する。
+- B. read-only 投影 CLI `scripts/status.mjs` (M1/M2 スケール): normalized 状態 (label・claim header・PR/CI・hidden summary) からループ表を描画する (行: issue / status / resume 点 / budgetLeft / mergeable 理由)。書込みはしない (src/forge.mjs の read 経路のみ、spec §2.1 の不変条件と一致)。terminal に表 1 枚だけで、ダッシュボードを作らない。C の Web Overview ページは B と同じ read モデルの Web 版 (B が基盤).
+- C. Web UI (スコープ内 — §1 の非ゴール line 更新済み): 2 ページのみ。状態を別保存しない以上、UI は読み取りに限定する (spec §2.1 の不変条件と一致)。
+  - Overview ページ: B の Web 版。read モデル (src/forge.mjs の read 経路) の HTML 投影 (issue cards、spec §3 の状態機械に沿ったハイライト、seat レーン、blocked の原因別内訳 = `blocked/spec-gap` / `blocked/budget` / `blocked/infra` の再 triage 一覧)。token は orchestrator の read 専用 (書込経路なし、gate は UI の責任外)。seat レーンの導出は session-id (claim header と hidden marker の `fp:session`、spec §12) + `fp:role` の MAY key (表示補助のみ、gate 判定入力は spec §12)。実行中 overlay は orchestrator のローカルメモリの一時的な実行状態のみ (永続しない UI ローカルな一時的な状態、失われたら forge 由来の履歴にフォールバック、spec §2.1 の不変条件)。
+  - Draft ページ: 人間 ↔ agent のチャットページ (合意 → 起票ボタン)。Web 側は薄いクライアントで、プロトコルは ACP (Agent Client Protocol — stdio で omp session を起動するので、UI は差し替え可能、専用埋め込みは不要)。token は人間の gh ログイン (author = 人間、spec §5 の identity 意味は変わらない)。合意 → 起票ボタンは human token で plan PR / spec PR / accept PR / Issue を起票するもの。お題モデル (`plan:` header のお題 Issue + plan turn の orchestrator 起票、spec §5) もこのボタンから打つ。
+  - token 分離: Overview の read token (orchestrator) は `humanAccounts` の外 (spec §4.4 の identity 突合は不変)。Draft の人間 token は人間本人で `humanAccounts` に入る。Draft セッションは orchestrator の seat に含まれない (`seatTiers` に draft key を置かない、spec §2.6)。UI の読取・更新間隔は config の `ui` key (spec §2.6)。
 - D. turn の実行ログ (中間判断・tool trace) は実行中間物なので UI に流さない (terminal のみ)。forge に写すのは可視 comment と hidden marker のみ。
+- ユーザーストーリー: 人間は Draft ページで対話する (目的・契約・Issue の下書き) → 合意ボタンで human token 起票 (plan PR / Issue) → 夜間は plan turn と child Issue の自律ループ → 朝は Overview ページで状態機械ハイライト・seat レーン・blocked 原因別・マージ確認。お題 1 本の流れ (§15・spec §10 の M4) も Draft ページから打てる (`plan:` header のお題 Issue → plan turn の分解案 = plan PR → 人間の承認 → child Issue のループ)。
 
 ## 15. 自律目標とお題モデル (決定記録、2026-10-30)
 
