@@ -76,6 +76,8 @@ fourth_power/
 ├── docs/spec.md             normative 仕様 (RFC2119)
 ├── docs/governance/   config.json (既定) + projects.json (プロバイダ割当) (spec §2.6) — プロジェクト本体 repoに設定をコミしない
 ├── prompts/                 phase 別プロンプト (layering)
+├── tests/perform/topics/    お題 fixture 群 P1–P4 (性能測定入力、spec §10 M5)
+├── tests/mock-forge/        mock forge provider (normalized object model の throwaway ローカル実装、spec §11)
 ├── src/                     orchestrator (core)
 │   ├── forge.mjs               forge ラッパ (read/write の唯一経路・provider 分離)
 │   ├── loop.mjs             poll → claim → turn → submit
@@ -337,3 +339,19 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 - harness skill が seat の入力に入ることはない (プロンプト層の添付は payload 組立側のみ、spec §5 の「参照条項のみ添付」)。手順の層が二つあることで、LLM への要求側 (プロンプト層) と、人間・実装側の手順 (harness skill) が混ざらない。
 - 実装作業 (このフレームワーク自体を組む仕事) のスキル棚卸し (harness 側 — この環境の omp が読み込む): gh 操作 (label・protection・workflow の bootstrap、fixture の起票・コメント)、git (クローン破棄・復元の実演)、node runner + AST 走査 (accept / `accept-vacuity` check)、ACP クライアント (omp session の stdio 起動)、Web クライアント (Overview の read 投影・markdown レンダリング)、provider API の conformance fixture (録画 JSON)。conformance 自体は deterministic code + fixture で、LLM は持たない (spec §6 のしきい値判定と同じ理由)。
 - 台帳・介入の数字 (metrics.mjs) は手順ではなく計算なので skill 側が持たない (spec §9)。
+
+## 17. 性能測定環境とお題 fixture (決定記録、2026-10-31)
+
+- 動機: forge は SSOT だが、性能測定の Issue/PR がサービスリポジトリ (本体 repo) を汚すのは許容しがたい。なので測定は mock 環境に閉じる (spec §10 M5・§11 の mock provider)。
+- 2 層の環境:
+  - 層 1 (既定・offline): mock forge provider (`tests/mock-forge/` — normalized object model の throwaway ローカル実装、spec §11)。orchestrator のコードは unchanged で、forge.mjs の endpoint だけが mock を向く。Issue/PR は mock の JSON store と使い捨て branch 上にのみ書かれ、サービスリポジトリには何も書かない。モデル層は §6 の conformance 録画 fixture か live モデルの選択 (spec §10 M5 の project 選択)。
+  - 層 2 (本番 provider・throwaway 隔離): scratch repo (M1) / throwaway repo に本番 provider で live 実行 — M3/M4 の実測は本番 provider の live 実行に限定される (spec §10 の MUST)。mock 実行を実測と数えない。サービスリポジトリに測定 Issue を入れない規定は spec §10 M5 の MUST NOT が担保する。
+- 性能視点グループ (mock 実行での出力、spec §10 M5):
+  - 正実装性: done が accept green のみで到達していること、false green の検出 (accept-vacuity 注入 fixture)、verifier の open thread が merge を阻止すること。
+  - 実装成功率: first-pass 率 (再 claim・resume なしで初 turn から done)、turn あたり merge 率。
+  - 自律性: 介入 (a)–(d) 数、必須承認数、お題チェーン自律率 (spec §9)。
+  - 効率: turn 数・PR attempt 数・time・cost (max-cost/max-time の上限到達回数)、gate 拒否数 (green 着弾前の拒否回数)。
+  - 安定性: クラッシュ復元成功率 (クローン破棄→復元)、中間状態残存なし (done ラベル・close の一致率)、claim 競合処理 (created_at 突合)。
+  - 分解品質: child Issue の done 率、plan PR の一発承認率 (差分なしでの承認)、粒度の過不足 (過剰分解・過小分解の検出)。
+- お題 fixture 群 (`tests/perform/topics/`): P1 ドッグフード mini (framework の機能 1 本 — `status.mjs` の --json 出力追加等、accept green→done)、P2 お題連鎖 (plan: header → plan PR 分解案 → 承認 1 回 → child chain → done)、P3 負群 (条項なし→`blocked/spec-gap`、budget cap 超過→`blocked/budget`、accept-vacuous 注入→red)、P4 クラッシュ復元 (クローン破棄→復元、M1 と同じ手順)。
+- 価値: mock は provider 差の抽象の実証でもある — 3 番目の provider として §11 の conformance suite と対で通り、provider swap が設計上で成立していることの証左になる。
