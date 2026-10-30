@@ -118,7 +118,7 @@ stateDiagram-v2
   復元 scan の勝者判定は scan 窓内の created_at 先頭 (§3) MUST で、復元セッションは **勝者の session-id を継承 MUST** (新 id を採らない — 新 id は re-claim とみなし budget 算入、claim コメント header は `claimed <同 id> at <元 created_at> resumed <iso-time>` に更新して created_at は改変しない)。復元 turn の読みは claim header・直近の要約 comment・PR/CI 状態のみ MUST (comment thread 全読 MUST NOT。gate 判定は §8 の再照合で API 個別フィールドを読む)。要約 comment は orchestrator が書く決定論的台帳記録 (永続側、§2.1・§6) で、実行中間ログは復元に入れない。
 - claim コメント書式は MUST 固定: `claimed <session-id> at <iso-time>` に `<!-- fp:session <session-id> -->` を MUST 併記 (可視 header は fallback と機械 scan の両者で使う、§12)。`at <iso-time>` は MUST API の created_at 正規値から gate (src/forge.mjs) が書く (session-id・timestamp の任意 lines を Action body で許容しない — 偽造は created_at 突合で却下、§3)。復元 scan も config.json / projects.json の条件から決定 MUST (§2.6)。branch 命名規約 MUST は `llm/issue-<N>-<slug>` (N = Issue 番号、slug = Issue タイトル先頭 30 文字の正規化。PR head branch と claim 参照の branch はこの値)。
 - budget 超過は `blocked/budget` MUST。台帳は forge の normalized リソースにのみ存在する。
-- plan turn の起動は決定論 MUST: scan が `plan:` header を起動トリガーとして読む (LLLM の判断で起動・却下を選択しない)。plan turn の budget・台帳は §7 の既存計算をそのまま使う (cap 超過で `blocked/budget` を付与 MUST — §3 の budget 遷移がそのまま成立し、新ラベルを置かない)。PR のマージ可能性判定に plan turn は関与しない。plan turn の payload も `contextBudget` の上限対象 MUST (§6)。
+- plan turn の起動は決定論 MUST: scan が `plan:` header を起動トリガーとして読む (LLM の判断で起動・却下を選択しない)。plan turn の budget・台帳は §7 の既存計算をそのまま使う (cap 超過で `blocked/budget` を付与 MUST — §3 の budget 遷移がそのまま成立し、新ラベルを置かない)。PR のマージ可能性判定に plan turn は関与しない。plan turn の payload も `contextBudget` の上限対象 MUST (§6)。
 
 ## 8. ゲート (normative)
 
@@ -177,7 +177,7 @@ stateDiagram-v2
 - tier path (§8): `tiers.highPaths` は provider 固有表記 MUST (GitHub `.github/workflows/`、GitLab `.gitlab-ci.yml` と `include:` 先ファイル)。GitLab の path ベース承認 (Code Owners) は Premium 限定なので、tier 判定は `risk-tier` check で MUST 担保 (free でも動く)。
 - provider conformance (緩和): 選択 forge provider の決定表 fixture MUST 通過。2 provider (GitHub / GitLab) 両方の conformance 維持は RECOMMENDED な拡張で、プロジェクトのスコープは選択 forge provider のみ (この bullet 自身・§10 M2)。未通過の forge provider は本番利用 MUST NOT。
 - Plan / PlanGroup は読み取らない: scan は label・note・checks のみ (§7)。
-- forge provider `mock` (テストプロバイダ): 同一の normalized object model を throwaway のローカルリポジトリ内 (`tests/mock-forge/`、使い捨て — 損失は §2.1 の不変条件と一致) で実装 MAY。orchestrator の scan・決定表・gate・metrics のコードは本番と同一で unchanged、書込み経路は forge.mjs のみ (§2 不変条件 5)。mock provider は §11 の conformance fixture MUST 通過 (mock の object 応答 JSON を fixture とする)。mock プロバイダのプロジェクトは性能測定スコープのみとし、本番利用 MUST NOT。bootstrap の production setup は実行しない (§4.4 は本番 provider のみ)。
+- forge provider `mock` (テストプロバイダ): 同一の normalized object model を throwaway のローカルリポジトリ内 (`tests/mock-forge/`、使い捨て — 損失は §2.1 の不変条件と一致) で実装 MAY。orchestrator の scan・決定表・gate・metrics のコードは本番と同一で unchanged、書込み経路は forge.mjs のみ (§2 不変条件 5)。mock 実行で branch の git endpoint と check 経路を mock 側が持つ MUST: branch は mock の bare repo 上の ref に PUSHされ、CI stand-in である deterministic executor が accept job と §4.1 の check 群 (同一 runner コード) を実行し、check 結果を mock の normalized check object に postする (invariant 4 の「マージ可能性は CI が決める」は mock 実行では executor stand-in が同じ経路で成立。executor は決定論であり LLM を使わない)。mock provider は §11 の conformance fixture MUST 通過 (mock の object 応答 JSON を fixture とする)。mock プロバイダのプロジェクトは性能測定スコープのみとし、本番利用 MUST NOT。bootstrap の production setup は実行しない (§4.4 は本番 provider のみ)。
 - milestone / epic の全体完了合意手順は spec で規定しない (人間または harness skill (PROPOSAL §16 の omp 側手順) の版付き合意と時間切れ ≠ 合格の手順による。seat 側のプロンプト層ではない)。
 
 ## 12. Hidden marker (normative)

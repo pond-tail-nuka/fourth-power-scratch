@@ -346,6 +346,7 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 - 2 層の環境:
   - 層 1 (既定・offline): mock forge provider (`tests/mock-forge/` — normalized object model の throwaway ローカル実装、spec §11)。orchestrator のコードは unchanged で、forge.mjs の endpoint だけが mock を向く。Issue/PR は mock の JSON store と使い捨て branch 上にのみ書かれ、サービスリポジトリには何も書かない。モデル層は §6 の conformance 録画 fixture か live モデルの選択 (spec §10 M5 の project 選択)。
   - 層 2 (本番 provider・throwaway 隔離): scratch repo (M1) / throwaway repo に本番 provider で live 実行 — M3/M4 の実測は本番 provider の live 実行に限定される (spec §10 の MUST)。mock 実行を実測と数えない。サービスリポジトリに測定 Issue を入れない規定は spec §10 M5 の MUST NOT が担保する。
+  - mock の CI 経路 (穴): mock 側に deterministic な executor stand-in を置く MUST — accept job と §4.1 の check 群を同一 runner コードで実行し、mock の check object に postする (spec §11 mock bullet。不変条件 4 の「CI が決める」が mock でも同じ経路で成立する)。branch の git endpoint も mock の bare repo ref (PUSH 先)。これにより mock は scan→turn→gate→merge の全ループを本番と同じコードで通せる。
 - 性能視点グループ (mock 実行での出力、spec §10 M5):
   - 正実装性: done が accept green のみで到達していること、false green の検出 (accept-vacuity 注入 fixture)、verifier の open thread が merge を阻止すること。
   - 実装成功率: first-pass 率 (再 claim・resume なしで初 turn から done)、turn あたり merge 率。
