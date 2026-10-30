@@ -73,7 +73,7 @@ stateDiagram-v2
 - Issue 作成前に `accept` ワークフローが存在 MUST (bootstrap が先行)。
 
 ### 4.5 品質担保・vacuous テスト禁止
-- 受け入れテストは **minimum 1 assertion + minimum 1 expect 実体** を持つ MUST。`assert` の実体は node の `assert` import (または `node:test` の `assert` 使用) の调用を指し、`expect` の実体は対応 runner の assertion 调用を指す。`assert` 無し・ `it()` 空・ mock の返値をそのまま返すだけのファイルは CI の `accept-vacuity` check (AST 走査) が fail MUST。同 check は定数アサーション (`assert(true)`、`expect(1).toBe(1)` 等、observable を参照しない引数) も fail MUST。
+- 受け入れテストは **minimum 1 assertion + minimum 1 expect 実体** を持つ MUST。`assert` の実体は node の `assert` import (または `node:test` の `assert` 使用) の呼び出しを指し、`expect` の実体は対応 runner の assertion 呼び出しを指す。`assert` 無し・ `it()` 空・ mock の返値をそのまま返すだけのファイルは CI の `accept-vacuity` check (AST 走査) が fail MUST。同 check は定数アサーション (`assert(true)`、`expect(1).toBe(1)` 等、observable を参照しない引数) も fail MUST。
 - **Mutation テスト準拠**: 受け入れ対象の実装コードを revert すると red になること。人間・reviewer は scratch repo の throwaway branch で revert を適用し red を確認 MUST (適用後の branch は MUST 破棄し、本番 PR に revert commit を混ぜない)。red 確認は scratch の CI で MUST 実行 (fixture でなく、red 期待値の回帰は M1 で MUST 検証)。
 - 実装セッションは `ci/accept/` を編集できない (§4.2) ため、green は「レビュー済みの受け入れ」に対する判定に固定される。
 - 構造検証: accept ファイルは forge 上の `accept:<id>` 条項と MUST 照合 (§4.2)。照合なし green は fail。

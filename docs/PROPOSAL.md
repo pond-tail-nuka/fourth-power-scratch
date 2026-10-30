@@ -89,7 +89,13 @@ fourth_power/
 └── scratch/                 walking prototype 用リポジトリテンプレート
 ```
 
-言語は Node/TypeScript を推奨。node --test が標準、gh は JSON を出す、jaq が JSON 加工に使える。Python は接着層に限定し、本体は作らない。
+言語は Node/TypeScript を推奨。node --test が標準、gh は JSON を出す、jaq が JSON 加工に使える。Python は接着層に限定し、本体は作らない。根拠:
+
+- 本体 (gate・決定表・metrics・bootstrap) は deterministic code の設計 (spec §7・§9) で、CI の single `accept` job と required check 群が同じ node runtime で揃う。決定表テストは `tests/fixtures/` の JSON を読むだけで offline 実行なので、runner 内蔵 (node --test) で依存増なしに成立する。
+- forge の IF は「JSON を入れて JSON を返す」形に寄せる (gh の JSON 出力・provider API の raw read、spec §2.6) ので、JSON 加工が code の主業務になる。jaq が接着に使える。
+- accept 本体 `ci/accept/<id>.test.mjs` (spec §4.1) と orchestrator が同じ runner・同じ言語になり、`accept-vacuity` の AST 走査 check も同じ runtime で書ける。
+- runtime provider (omp) 側も JS  ecosystem なので、ACP の stdio 起動・seat 割当の model 呼び出しが同じ実行環境で繋がる (spec §6)。
+- Python を本体に持たせないのは、runtime を 2 系統にすると CI の required check 群・決定表・bootstrap が二重実装になり、乖離検出 (config-consistency・no-state) の対象が広がって不変条件の検査点が二つ以上に増えるため。接着層 (shell 側・しきい値変換の helper 等) には Python を認めるが、forge の読み書きと判定は node 側に寄せる (spec §2 の invariant の範疇)。
 
 ## 5. 受け入れ契約 (Acceptance Contract)
 
