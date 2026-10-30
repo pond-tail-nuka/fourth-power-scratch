@@ -97,6 +97,20 @@ fourth_power/
 - runtime provider (omp) 側も JS  ecosystem なので、ACP の stdio 起動・seat 割当の model 呼び出しが同じ実行環境で繋がる (spec §6)。
 - Python を本体に持たせないのは、runtime を 2 系統にすると CI の required check 群・決定表・bootstrap が二重実装になり、乖離検出 (config-consistency・no-state) の対象が広がって不変条件の検査点が二つ以上に増えるため。接着層 (shell 側・しきい値変換の helper 等) には Python を認めるが、forge の読み書きと判定は node 側に寄せる (spec §2 の invariant の範疇)。
 
+候補比較 (決定記録 2026-10-31。★ = 4 段階 ●/○/△/×):
+
+| 候補 | テストのしやすさ | library・OSS | 軽量 | 速度 | 省メモリ | メンテナンス性 | 本設計固有の決着点 |
+|---|---|---|---|---|---|---|---|
+| Node/TS | ● (runner 内蔵 `node --test`。fixture JSON を読むだけ の offline 実行) | ◎ (fetch・JSON・JS AST の pure-JS parser が npm に揃う) | △ (startup 60ms・常駐 40MB 級) | ○ | ○ | ◎ (型 checking・ビルドなし) | accept (.test.mjs) と orchestrator と CI check が 1 runtime で揃う |
+| Bun | ○ (node --test 互換) | ◎ (npm 互換) | ○ (single binary・startup 速) | ○◎ | ○ | ○ (runtime が新しい。互換リスクあり) | code 無変換で runtime のみ差し替えの選択肢 |
+| Deno | ○ (runner 内蔵) | ○ (npm 互換は控えめ) | ○ | ◎ | ○ | ○ (TS 原生・ビルドなし) | accept runner が node と別経路になる (CI の single job の前提が崩れる) |
+| Python | ○ (pytest 成熟だが node 側と別 runner) | ◎ (データ加工は豊だ が JS AST・gh 道具がやや足りない) | △ (interpreter + 依存が重い) | △ (最遅) | ○ | ○ (型付けは限定的) | 「本体は作らない」制約付き。runtime 二系統目が生じる |
+| Go | ◎ (go test は簡単) | ○ (stdlib の JSON・HTTP は良い。JS AST は外部 library) | ◎ (静的 binary・startup 小) | ◎ | ◎ | ◎ (コンパイル速い) | accept と orchestrator が別言語になり、runner・AST が二系統になる |
+| Rust | ○ (cargo test は良い が toolchain が重い) | ◎ (serde は速い。JS AST は swc/oxc 側で重い) | ◎ | ◎ | ◎ | △ (言語コスト・ビルド遅い) | 同上 + AST 走査 check の実装経路が JS 側と乖離 |
+
+- 本業務のタスク特性: 本体の仕事はネットワーク I/O (API 呼び) と LLM turn が主で、CPU・メモリは律速ではない。速度・省メモリの差は挙動に効かない (律速が別にある)。よって「テスト・OSS・メンテナンス性」の列が効く。
+- 決着点: accept-vacuity の AST 走査と accept テスト本体が JS なので、runner・AST・runtime を 1 系統に保てるのは JS 系統 (Node/Bun/Deno) のみ。その中で runner 内蔵・依存ゼロ・CI に node 標準・Bun 差し替え可能 (互換) という点で Node を標準とする。runtime 差し替え (Bun) は code 無変更の選択肢で、spec §6 の runtime provider とは別の話 (座席の model 割当とは無関係)。Rust・Go の本体採用は runner 二系統・JS AST 外部化を招くので不採用。
+
 ## 5. 受け入れ契約 (Acceptance Contract)
 
 normative は spec §4。要点:
