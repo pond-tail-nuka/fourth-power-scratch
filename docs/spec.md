@@ -175,7 +175,7 @@ stateDiagram-v2
 - tier path (§8): `tiers.highPaths` は provider 固有表記 MUST (GitHub `.github/workflows/`、GitLab `.gitlab-ci.yml` と `include:` 先ファイル)。GitLab の path ベース承認 (Code Owners) は Premium 限定なので、tier 判定は `risk-tier` check で MUST 担保 (free でも動く)。
 - provider conformance (緩和): 選択 forge provider の決定表 fixture MUST 通過。2 provider (GitHub / GitLab) 両方の conformance 維持は RECOMMENDED な拡張で、プロジェクトのスコープは選択 forge provider のみ (この bullet 自身・§10 M2)。未通過の forge provider は本番利用 MUST NOT。
 - Plan / PlanGroup は読み取らない: scan は label・note・checks のみ (§7)。
-- milestone / epic の全体完了合意手順は spec で規定しない (人間または skill の版付き合意と時間切れ ≠ 合格の手順による。PROPOSAL §15)。
+- milestone / epic の全体完了合意手順は spec で規定しない (人間または harness skill (PROPOSAL §16 の omp 側手順) の版付き合意と時間切れ ≠ 合格の手順による。seat 側のプロンプト層ではない)。
 
 ## 12. Hidden marker (normative)
 

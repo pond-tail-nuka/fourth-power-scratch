@@ -318,21 +318,22 @@ gh label create claimed --color "9ccf13" && gh label create blocked/spec-gap --c
 ## 15. 自律目標とお題モデル (決定記録、2026-10-30)
 
 - 自律の目標: 人間の介入はお題設定 1 回のみ、以降は自律稼働 (plan turn の分解 → 人間の承認 → child Issue の自律マージ連鎖)。
-- 参照: AgentPost (https://qiita.com/shyamagu/items/c419cff2c03b544fd877 — 3 チームが郵便受けだけで開発→QA→終了確認を約 23 分で完遂)。本設計との対応: 郵便受け = forge の comment (SSOT 不変条件なので別の郵便受けは不要)。記事の「オーケストレータのコストが上位」批判は LLM オーケストレータが対象で、本プロジェクトの scan・決定表は deterministic code なので該当しない。契約同報 = spec 条項 (仕様先行)。時間切れ ≠ 合格 = §8 の再照合と同じ原則 (「連絡がないことを合格とみなさない」は記事の側)。全体完了合意は版付き合意 + 時間切れは未確認扱い (skill 側の手順。milestone の close 意味は spec で規定しない)。
+- 参照: AgentPost (https://qiita.com/shyamagu/items/c419cff2c03b544fd877 — 3 チームが郵便受けだけで開発→QA→終了確認を約 23 分で完遂)。本設計との対応: 郵便受け = forge の comment (SSOT 不変条件なので別の郵便受けは不要)。記事の「オーケストレータのコストが上位」批判は LLM オーケストレータが対象で、本プロジェクトの scan・決定表は deterministic code なので該当しない。契約同報 = spec 条項 (仕様先行)。時間切れ ≠ 合格 = §8 の再照合と同じ原則 (「連絡がないことを合格とみなさない」は記事の側)。全体完了合意は版付き合意 + 時間切れは未確認扱い (harness skill 側の手順、§16。milestone の close 意味は spec で規定しない)。
 - プランニング負荷の移転: agile のプランニングの難所 = 要求と受入条件の作成。お題モデルではこの負荷を「人間が Issue を 1 本ずつ書くこと」から「plan PR の承認」へ移す (spec §5。plan PR の merge/close は介入算入 — 承認 1 回を数える。ただし child Issue の自律率には含めない。child Issue 側の介入は (a)(b)(c) のみ)。
 - accept-first の維持: AgentPost の完遂は「QA エージェントの合意」で、受け入れテストはない。合意は動く (記事の v1 は final_candidate: false で差し戻し)。本設計の完了判定は合意ではなく accept green (spec §4.3)。
 - M4 (spec §10) でお題の実測を規定。お題チェーンの自律率 (child Issue 数に対する done 到達の割合) を metrics.mjs が optional で算出 (spec §9)。
 
 ## 16. 実装スキル棚卸し (決定記録、2026-10-31)
 
-- 原則: skill は「手順」 (人間・agent が ものを運ぶ仕方) だけを持つ。状態と判定は deterministic code が持つ — scan・決定表・label 遷移・gate はコードであり、skill はそれを持って持たない (spec §2・§7 の不変条件の再確認)。spec §1 の「手順はプロンプト層・リファランスとして運ぶ」が対応の置き所。
-- skill の置き場: framework repo (`docs/governance/skills/`) に置く。プロジェクト本体に skill をコミしないのは config と同じ原則 (spec §2.6 の設定分離)。
-- 人間側 skill:
+- 原則: 層を分ける — **2 種類の「手順の置き場」がある**。(1) **harness (omp) 側の skill**: この環境で fourth_power を実装・運用するときに omp が読み込む手順 (人間と実装作業用)。(2) **プロンプト層・リファランス**: fourth_power が LLM の seat に処理を要求するときの入力 — deterministic な payload 組立 (spec 条項参照 + accept 条項 + scope) と TurnRole 選択 (付録 A) のみ。seat の手順 (implement・verify・plan) は skill ではなくプロンプト層に置く。この区別により、台帳・介入の identity 意味 (spec §5) と conformance の決定論性 (spec §6) が保たれる。
+- 置き場: skill は framework repo (`docs/governance/skills/`) (harness 用)、プロンプト層のファイルは別の棚 (`docs/governance/prompts/`) (seat 側に payload 組立で機械的に添付される)。読む側が違うので棚を分ける。プロジェクト本体にコミしないのは config と同じ原則 (spec §2.6 の設定分離)。
+- harness (omp) 側の skill — 人間が使うもの (この環境の omp が読み込む手順):
   - `draft-ticket` (Draft ページの裏の手順。直接 gh 操作も同じ手順): gh auth の状態確認 → markdown 起案 → プレビュー・編集 → 起票。契約 (author ∈ humanAccounts・確定版のみ投稿・単一ログイン) は spec §5 の入力契約が持っており、skill 側は差し替え可能 (spec §5 の「固定されるのはこの契約のみ」)。
   - `retriage` (blocked の人間対応): spec §3 の操作 (a)–(d) を流す (旧 claim のラベル削除・未マージ PR の close・お題の plan turn 無効化と child Issue の close)。判断 (done/blocked の決定・ラベル遷移) は orchestrator の決定表側で、skill は手続きのみ流す (§7)。
   - `milestone-close` (全体完了合意): 版付き合意 + 時間切れ ≠ 合格の手順。spec §11 が「skill 側の手順」として指す実装先で、最終合意は人間の版付き記録のみ (時間切れを合格と数えない、PROPOSAL §15)。
-- orchestrator 側 skill (手順の運搬のみ、決定論はコード):
-  - `plan-decompose` (plan turn の手順 — spec §5 のお題モデル): 分解案を `docs/plan/` PR に起草。child Issue 本文の機械組立 (spec 条項参照・accept 条項・scope 宣言のみ) は組立ロジック側の仕事で、skill が自由文を本文に混ぜない (spec §5)。
+- seat 側の手順 (fourth_power が LLM に処理を要求するときのもの — skill ではなくプロンプト層・リファランスとして運ぶ。棚は `docs/governance/prompts/`、payload 組立で機械的に添付される):
+  - `plan-decompose` (plan turn の手順 — spec §5 のお題モデル): 分解案を `docs/plan/` PR に起草。child Issue 本文の機械組立 (spec 条項参照・accept 条項・scope 宣言のみ) は組立ロジック側の仕事で、プロンプト層が自由文を本文に混ぜない (spec §5)。
   - `implement-turn` / `verify-turn`: claim → branch → PR → CI → ready の運搬手順 (seat 割当は config の `seatTiers`、spec §2.6・§6)。verifier は別セッション fresh context (spec §8)。
-- 実装作業 (このフレームワーク自体を組む仕事) のスキル棚卸し: gh 操作 (label・protection・workflow の bootstrap、fixture の起票・コメント)、git (クローン破棄・復元の実演)、node runner + AST 走査 (accept / `accept-vacuity` check)、ACP クライアント (omp session の stdio 起動)、Web クライアント \(Overview の read 投影・markdown レンダリング)、provider API の conformance fixture (録画 JSON)。conformance 自体は deterministic code + fixture で、LLM は持たない (spec §6 のしきい値判定と同じ理由)。
+- harness skill が seat の入力に入ることはない (プロンプト層の添付は payload 組立側のみ、spec §5 の「参照条項のみ添付」)。手順の層が二つあることで、LLM への要求側 (プロンプト層) と、人間・実装側の手順 (harness skill) が混ざらない。
+- 実装作業 (このフレームワーク自体を組む仕事) のスキル棚卸し (harness 側 — この環境の omp が読み込む): gh 操作 (label・protection・workflow の bootstrap、fixture の起票・コメント)、git (クローン破棄・復元の実演)、node runner + AST 走査 (accept / `accept-vacuity` check)、ACP クライアント (omp session の stdio 起動)、Web クライアント (Overview の read 投影・markdown レンダリング)、provider API の conformance fixture (録画 JSON)。conformance 自体は deterministic code + fixture で、LLM は持たない (spec §6 のしきい値判定と同じ理由)。
 - 台帳・介入の数字 (metrics.mjs) は手順ではなく計算なので skill 側が持たない (spec §9)。
