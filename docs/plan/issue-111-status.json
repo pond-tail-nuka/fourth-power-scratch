@@ -1,0 +1,28 @@
+{
+  "children": [
+    {
+      "id": "A21-A",
+      "title": "status.mjs --json 出力本体",
+      "cmd": "node --test ci/accept/a21-a.test.mjs",
+      "scope": [
+        "scripts/status.mjs"
+      ],
+      "refs": [
+        "spec §2.1",
+        "spec §5"
+      ]
+    },
+    {
+      "id": "A21-B",
+      "title": "status.mjs --json stale banner",
+      "cmd": "node --test ci/accept/a21-b.test.mjs",
+      "scope": [
+        "scripts/status.mjs"
+      ],
+      "refs": [
+        "spec §2.6",
+        "spec §6"
+      ]
+    }
+  ]
+}
