@@ -1,0 +1,9 @@
+[
+  { "type": "session", "sessionId": "sess-p2-plan-01", "role": "plan", "tier": "high" },
+  { "type": "text", "text": "plan turn: reading お題 Issue #21 visible header `plan:` and human お題 text only (spec §5)." },
+  { "type": "text", "text": "decomposition draft → docs/plan/issue-21-status-json.json: 2 child Issues (mechanical assembly from plan PR diff, no free text)." },
+  { "type": "text", "text": "child #22: status.mjs --json projection (accept A21-A, scope scripts/status.mjs, ref spec §14 B)." },
+  { "type": "text", "text": "child #23: status.mjs --json stale banner (ui interval, accept A21-B, scope scripts/status.mjs, ref spec §14)." },
+  { "type": "text", "text": "plan PR #24 drafted (docs/plan/, tier high, head sha rec-head-p2a1f0c7). plan turn ends; ledger accounting row posted." },
+  { "type": "usage", "turn": 1, "costUSD": 0.72, "seconds": 320, "at": "2026-10-31T02:10:00Z" }
+]

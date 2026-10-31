@@ -1,0 +1,18 @@
+{
+  "input": {
+    "labels": [
+      "done"
+    ],
+    "issueState": "open",
+    "prState": "merged",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "done"
+    ],
+    "turn": "close"
+  }
+}

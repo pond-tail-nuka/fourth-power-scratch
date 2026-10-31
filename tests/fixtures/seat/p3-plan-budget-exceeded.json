@@ -1,0 +1,41 @@
+[
+  {
+    "type": "session",
+    "sessionId": "sess-p3-plan-01",
+    "role": "plan",
+    "tier": "high"
+  },
+  {
+    "type": "text",
+    "text": "plan turn 1: reading お題 text — decomposition draft started."
+  },
+  {
+    "type": "usage",
+    "turn": 1,
+    "costUSD": 1.2,
+    "seconds": 400,
+    "at": "2026-10-31T08:00:00Z"
+  },
+  {
+    "type": "text",
+    "text": "plan turn 2: decomposition draft revised (child scope too coarse)."
+  },
+  {
+    "type": "usage",
+    "turn": 2,
+    "costUSD": 1.2,
+    "seconds": 400,
+    "at": "2026-10-31T08:06:40Z"
+  },
+  {
+    "type": "text",
+    "text": "plan turn 3: cap exceeded — plan PR draft unmerged (docs/plan/, head sha rec-head-p3d4e5f6). orchestrator blockIssue(blocked/budget) (spec §7 plan 打切り、§3 budget 遷移)。"
+  },
+  {
+    "type": "usage",
+    "turn": 3,
+    "costUSD": 1.2,
+    "seconds": 400,
+    "at": "2026-10-31T08:13:20Z"
+  }
+]

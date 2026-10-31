@@ -1,0 +1,25 @@
+{
+  "input": {
+    "labels": [
+      "claimed"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": [
+      {
+        "reviewer": "pond-tail-nuka",
+        "sha": "sha-a"
+      }
+    ],
+    "headSha": "sha-a",
+    "budget": {}
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "submit",
+    "mergeAllowed": true
+  }
+}

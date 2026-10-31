@@ -1,0 +1,23 @@
+{
+  "input": {
+    "labels": [
+      "in_review"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": [
+      {
+        "reviewer": "pond-tail-nuka",
+        "sha": "sha-old"
+      }
+    ],
+    "headSha": "sha-new"
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "review"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "input": {
+    "labels": [
+      "in_review"
+    ],
+    "prState": "ready",
+    "ciState": "red",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "fix"
+  }
+}

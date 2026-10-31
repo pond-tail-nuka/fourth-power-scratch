@@ -1,0 +1,19 @@
+{
+  "input": {
+    "labels": [
+      "claimed"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": [],
+    "headSha": "sha-a"
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "submit",
+    "mergeAllowed": false
+  }
+}

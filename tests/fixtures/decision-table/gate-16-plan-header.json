@@ -1,0 +1,18 @@
+{
+  "input": {
+    "labels": [
+      "backlog"
+    ],
+    "prState": "none",
+    "ciState": "none",
+    "threads": 0,
+    "approvals": {},
+    "planHeader": true
+  },
+  "expected": {
+    "labels": [
+      "backlog"
+    ],
+    "turn": "plan"
+  }
+}

@@ -1,0 +1,107 @@
+[
+  {
+    "type": "session",
+    "sessionId": "sess-p3-budget-01",
+    "role": "implement",
+    "tier": "low"
+  },
+  {
+    "type": "text",
+    "text": "turn 1: claimed issue #31 — branch llm/issue-31-oversized-refactor, draft PR #32."
+  },
+  {
+    "type": "usage",
+    "turn": 1,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:00:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 2: fix round 1 (CI red → repair attempt)."
+  },
+  {
+    "type": "usage",
+    "turn": 2,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:04:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 3: fix round 2 (scope creep detected by scope-guard)."
+  },
+  {
+    "type": "usage",
+    "turn": 3,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:08:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 4: rebase (mergeable dirty)."
+  },
+  {
+    "type": "usage",
+    "turn": 4,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:12:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 5: fix round 3 (accept red)."
+  },
+  {
+    "type": "usage",
+    "turn": 5,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:16:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 6: fix round 4 (accept red)."
+  },
+  {
+    "type": "usage",
+    "turn": 6,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:20:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 7: fix round 5 (accept red)."
+  },
+  {
+    "type": "usage",
+    "turn": 7,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:24:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 8: fix round 6 (ledger: maxTurns cap reached)."
+  },
+  {
+    "type": "usage",
+    "turn": 8,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:28:00Z"
+  },
+  {
+    "type": "text",
+    "text": "turn 9: cap exceeded — orchestrator blockIssue(blocked/budget)."
+  },
+  {
+    "type": "usage",
+    "turn": 9,
+    "costUSD": 0.6,
+    "seconds": 240,
+    "at": "2026-10-31T04:32:00Z"
+  }
+]

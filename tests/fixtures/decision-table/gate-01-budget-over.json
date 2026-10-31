@@ -1,0 +1,20 @@
+{
+  "input": {
+    "labels": [
+      "in_review"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": [],
+    "budget": {
+      "over": true
+    }
+  },
+  "expected": {
+    "labels": [
+      "blocked/budget"
+    ],
+    "turn": "block"
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "default": {"provider": "mock", "repo": "mock/fourth_power"},
+  "projects": {}
+}

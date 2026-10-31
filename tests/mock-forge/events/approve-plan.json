@@ -1,0 +1,9 @@
+{
+  "kind": "approve-event",
+  "repo": "mock/fourth_power",
+  "pr": 1,
+  "reviewer": "pond-tail-nuka",
+  "commit_id": "rec-head-p2a1f0c7",
+  "state": "APPROVED",
+  "submitted_at": "2026-10-04T04:00:00Z"
+}

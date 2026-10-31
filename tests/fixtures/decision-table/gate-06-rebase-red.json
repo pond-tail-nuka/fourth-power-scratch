@@ -1,0 +1,17 @@
+{
+  "input": {
+    "labels": [
+      "rebase_required"
+    ],
+    "prState": "ready",
+    "ciState": "red",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "rebase_required"
+    ],
+    "turn": "rebase"
+  }
+}

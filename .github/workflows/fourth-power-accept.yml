@@ -1,0 +1,15 @@
+# fourth-power accept CI (spec §4 CI gate): PR に accept ワークフロー + §4.1 の deterministic check 群。
+# runner.mjs (src) が同一の check をローカルでも mock executor でも実行する (CI と同一コードの経路)。
+name: fourth-power-accept
+on: pull_request
+jobs:
+  accept:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: run checks (runner.mjs 同一コード)
+        run: node scripts/ci-run.mjs
+permissions:
+  contents: read

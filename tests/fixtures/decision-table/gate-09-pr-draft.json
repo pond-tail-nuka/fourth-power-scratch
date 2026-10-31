@@ -1,0 +1,17 @@
+{
+  "input": {
+    "labels": [
+      "claimed"
+    ],
+    "prState": "draft",
+    "ciState": "none",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "claimed"
+    ],
+    "turn": "implement"
+  }
+}

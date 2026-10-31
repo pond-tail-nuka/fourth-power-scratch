@@ -1,0 +1,24 @@
+{
+  "input": {
+    "labels": [
+      "in_review"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": [
+      {
+        "reviewer": "pond-tail-nuka",
+        "sha": "sha-a"
+      }
+    ],
+    "headSha": "sha-a"
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "submit",
+    "mergeAllowed": true
+  }
+}

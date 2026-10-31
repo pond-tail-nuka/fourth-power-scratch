@@ -1,0 +1,12 @@
+[
+  { "type": "session", "sessionId": "sess-p2-child-01", "role": "implement", "tier": "low" },
+  { "type": "text", "text": "claim: issue #22 (child of お題 #21 via plan PR #24) — branch llm/issue-22-status-projection." },
+  { "type": "text", "text": "implemented scope scripts/status.mjs only (scope-guard clean). accept: node --test ci/accept/a21-a.test.mjs — green. draft PR #25; status-exclusivity: single state label (claimed)." },
+  { "type": "usage", "turn": 1, "costUSD": 0.5, "seconds": 300, "at": "2026-10-31T03:00:00Z" },
+  { "type": "text", "text": "verifier findings #1: stale banner field missing (open thread)." },
+  { "type": "usage", "turn": 2, "costUSD": 0.3, "seconds": 180, "at": "2026-10-31T03:10:00Z" },
+  { "type": "text", "text": "fix turn: stale banner added under ui interval rule; thread resolved; accept re-run green." },
+  { "type": "usage", "turn": 3, "costUSD": 0.22, "seconds": 240, "at": "2026-10-31T03:22:00Z" },
+  { "type": "text", "text": "submit: gate recheck pass (required checks green, human approval rec-sha head matches, threads 0 open). merged (squash) → done label → issue close." },
+  { "type": "usage", "turn": 4, "costUSD": 0.12, "seconds": 160, "at": "2026-10-31T03:30:00Z" }
+]

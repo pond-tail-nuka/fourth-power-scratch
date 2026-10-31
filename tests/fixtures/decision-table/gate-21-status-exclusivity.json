@@ -1,0 +1,20 @@
+{
+  "input": {
+    "labels": [
+      "claimed",
+      "in_review"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "claimed",
+      "in_review"
+    ],
+    "turn": "none",
+    "exclusiveConflict": true
+  }
+}

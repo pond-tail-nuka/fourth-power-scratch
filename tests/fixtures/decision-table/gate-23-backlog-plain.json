@@ -1,0 +1,17 @@
+{
+  "input": {
+    "labels": [
+      "backlog"
+    ],
+    "prState": "none",
+    "ciState": "none",
+    "threads": 0,
+    "approvals": {}
+  },
+  "expected": {
+    "labels": [
+      "backlog"
+    ],
+    "turn": "none"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "input": {
+    "labels": [
+      "in_review",
+      "cohort:typical"
+    ],
+    "prState": "ready",
+    "ciState": "green",
+    "threads": 0,
+    "approvals": []
+  },
+  "expected": {
+    "labels": [
+      "in_review"
+    ],
+    "turn": "submit",
+    "mergeAllowed": true
+  }
+}
