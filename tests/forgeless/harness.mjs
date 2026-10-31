@@ -166,13 +166,14 @@ export function createForgelessHarness({ repoKey = 'fourth-power/mock-scratch', 
   forge.setLabel = (issueId, label) => {
     const p = parseIssue(issueId);
     const cur = mockServer.apiGet(issuePathOf(p.repo, p.number)).labels ?? [];
-    mockServer.apiSend('POST', `${issuePathOf(p.repo, p.number)}/labels`, {}, { labels: [label] });
     const cls = labelClass(label);
+    // src/forge.mjs の setLabel と同一順序 (旧クラス label を DELETE してから POST — 共存窓を作らない)。
     if (cls) {
       for (const o of cur.map((l) => (typeof l === 'string' ? l : l.name))) {
         if (o !== label && labelClass(o) === cls) mockServer.apiSend('DELETE', `${issuePathOf(p.repo, p.number)}/labels/${encodeURIComponent(o)}`, {}, undefined);
       }
     }
+    mockServer.apiSend('POST', `${issuePathOf(p.repo, p.number)}/labels`, {}, { labels: [label] });
     return true;
   };
   forge.removeLabel = (issueId, label) => {

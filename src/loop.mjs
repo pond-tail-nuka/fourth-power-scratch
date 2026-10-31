@@ -83,8 +83,17 @@ export async function writeClaim(forge, issueId, sessionId, opts = {}) {
   if (noteId && forge.commentCreatedAt) {
     const created = await forge.commentCreatedAt(noteId);
     if (created && created !== at) {
-      const rewrite = await forge.postComment(issueId, `claimed ${sessionId} at ${created}\n<!-- fp:session ${sessionId} -->`);
-      return { noteId: rewrite?.noteId ?? rewrite?.id ?? noteId, createdAt: created };
+      // 書き直しは新 comment のみ (§3 edit 不可)。§7 の再 claim 書式 `at <元 created_at> resumed <iso>` を使う —
+      // 突合は「note list に現れた created_at の家系集合」側で元 comment の created_at を許容するため
+      // 新旧ともに却下され勝者不在になることはない (単なる clock peek 写しでは新 comment 自身の
+      // created_at と厳密突合して両方偽装扱いになる — claims.mjs 参照)。同一 session-id なので新 id 不算入 (§7)。
+      const rewrite = await forge.postComment(issueId, resumeClaimBody(
+        { sessionId, atIso: created, created: Date.parse(created) },
+        opts.clockNow?.() ?? opts.now ?? new Date().toISOString(),
+      ));
+      const rewriteId = rewrite?.noteId ?? rewrite?.id ?? null;
+      const created2 = rewriteId && forge.commentCreatedAt ? await forge.commentCreatedAt(rewriteId) : created;
+      return { noteId: rewriteId ?? noteId, createdAt: created2 };
     }
     return { noteId, createdAt: created };
   }
@@ -475,7 +484,7 @@ export function createOrchestrator(deps) {
     closePlanChildren,
     executeAction,
     buildDecideInput,
-    claimIssue: (issueId, sessionId, opts) => writeClaim(forge, issueId, sessionId, { ...opts, now: clock() }),
+    claimIssue: (issueId, sessionId, opts) => writeClaim(forge, issueId, sessionId, { ...opts, now: clock(), clockNow: clock }),
   };
 }
 

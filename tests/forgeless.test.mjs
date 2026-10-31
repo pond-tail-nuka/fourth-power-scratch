@@ -1,6 +1,6 @@
-// tests/forgeless.test.mjs — MR/Issue 挙動の forge ゼレステスト + 人間に期待する挙動の自動テスト (harness.mjs 参照)。
+// tests/forgeless.test.mjs — MR/Issue 挙動の forge ゼロテスト + 人間に期待する挙動の自動テスト (harness.mjs 参照)。
 // src/forge.mjs も executor の bare repo git も通さない (spec §11 mock bullet: 同一 code path の制約は harness 側で再現)。
-// orchestror 本体は本物 — 人間動作 (承認・マージ判断・re-triage・thread 解決・条項 comment) を REST 経由で自動化し、
+// orchestrator 本体は本物 — 人間動作 (承認・マージ判断・re-triage・thread 解決・条項 comment) を REST 経由で自動化し、
 // 期待挙動と逸脱 (§8 stale 承認・§3 Closes keyword・protection・§9 介入分類) を検出する。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,7 +9,8 @@ import { createForgelessHarness } from './forgeless/harness.mjs';
 import { STATUS_SRC, seedAcceptFiles, parseTopic, fenceOf, childSectionText } from './perform/accept-src.mjs';
 import { startTurn as stubStartTurn } from '../src/stubSeat.mjs';
 import { runChecks } from '../src/runner.mjs';
-import { branchName, hasAcceptClauses, ciStateOf } from '../src/loop.mjs';
+import { branchName, hasAcceptClauses, ciStateOf, writeClaim } from '../src/loop.mjs';
+import { parseClaims, pickWinner } from '../src/claims.mjs';
 
 const REPO = 'fourth-power/mock-scratch';
 const BOT = 'fourth-power-bot';
@@ -33,7 +34,7 @@ function greenBranch(h, issue) {
   return h.forge.createPR({ repo: REPO, head: branchName(issue.number, issue.title), base: 'main', title: `agent: issue #${issue.number}`, body: `squash(#${issue.number})\nrefs: spec §2.1 accept:A1`, draft: true });
 }
 
-test('期待する人間挙動: head SHA 承認 → merge 成立と done/ close (§8・§3 順序)', async () => {
+test('期待する人間挙動: head SHA 承認 → merge 成立と done/close (§8・§3 順序)', async () => {
   const { h } = makeHarness();
   const issue = mkP1Issue(h);
   await h.claimAndLabel(issue, 'sess-fl-p1-01');
@@ -246,4 +247,26 @@ test('unit: ciStateOf は required 欠落を pending とみなす (green 誤爆�
   assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', ['accept']), 'green');
   assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', null), 'green');
   assert.equal(ciStateOf([...single, { name: 'fourth-power-accept', state: 'failure', headSha: 'h1', issuer: 'fourth-power-bot' }], 'h1', 'fourth-power-bot', ['fourth-power-accept', 'accept']), 'red');
+});
+
+test('unit: writeClaim 遅れ fallback — 新旧ともに却下で勝者不在にしない (§7 resume header で家系突合を通す)', async () => {
+  // 実 GitHub の遅れ境界跨ぎ偽装: 書き込みごとに created_at が 1 秒進む (advance-before-assign) forge。
+  let ms = Date.parse('2026-01-01T00:00:00Z');
+  const clock = () => new Date(ms).toISOString();
+  const posted = [];
+  const forge = {
+    postComment: async (issueId, body) => {
+      ms += 1000;
+      const note = { id: `n${posted.length + 1}`, body, createdAt: new Date(ms).toISOString() };
+      posted.push(note);
+      return { noteId: note.id, createdAt: note.createdAt };
+    },
+    commentCreatedAt: async (noteId) => posted.find((n) => n.id === noteId)?.createdAt ?? null,
+  };
+  const res = await writeClaim(forge, 'i1', 'sess-skew', { now: clock(), clockNow: clock });
+  assert.equal(posted.length, 2, 'clock 遅れでずれたため新 comment で書き直している (comment edit ではない、§3)');
+  const { winner } = pickWinner(parseClaims(posted));
+  assert.ok(winner, '書き直し comment が勝者になる (旧 comment も却下だが勝者不在にならない)');
+  assert.equal(winner.sessionId, 'sess-skew');
+  assert.ok(winner.resumed, '§7 の再 claim 書式 (at 元 created_at + resumed header) で継承');
 });
