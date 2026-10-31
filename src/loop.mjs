@@ -45,11 +45,15 @@ function prStateOf(pr) {
   return 'ready';
 }
 
-/** canonical issuer の check 投稿のみ数える (非 canonical は無視、§8). head SHA の投稿のみ (§8 stale 再照合). */
-function ciStateOf(checks, headSha, botActor) {
+/** canonical issuer の check 投稿のみ数える (非 canonical は無視、§8). head SHA の投稿のみ (§8 stale 再照合). requiredNames 指定時は欠落 check を pending とみなす (§7 — 決定表が submit に誤爆しない)。 */
+export function ciStateOf(checks, headSha, botActor, requiredNames = null) {
   const mine = (checks ?? []).filter((c) => (c.issuer === botActor || c.issuer === 'adapter') && (!headSha || c.headSha === headSha));
   if (mine.length === 0) return 'none';
   if (mine.some((c) => c.state === 'failure')) return 'red';
+  if (requiredNames && requiredNames.length > 0) {
+    const names = new Set(mine.map((c) => c.name));
+    if (requiredNames.some((n) => !names.has(n))) return 'pending';
+  }
   if (mine.some((c) => c.state === 'pending')) return 'pending';
   return 'green';
 }
@@ -64,15 +68,25 @@ export function prBodyFor(issue, clauses) {
 /** 勝者 claim comment を書く (§3 勝者の session-id を継承。復元では resumeClaimBody で新 comment にする)。 */
 export async function writeClaim(forge, issueId, sessionId, opts = {}) {
   const resume = !!opts.resumeOf;
-  const header = resume
-    ? resumeClaimBody(opts.resumeOf, opts.now ?? new Date().toISOString())
-    : `claimed ${sessionId} at P\n<!-- fp:session ${sessionId} -->`;
+  if (resume) {
+    const res = await forge.postComment(issueId, resumeClaimBody(opts.resumeOf, opts.now ?? new Date().toISOString()));
+    return { noteId: res?.noteId ?? res?.id ?? null, createdAt: res?.createdAt ?? null };
+  }
+  // §3 の正本は created_at で `at` はそこから書く — edit は MUST 不可 (書き直しは新 comment のみ)。
+  // 単一 POST で created_at と同一秒の opts.now を使う (harness/perform の clock は forge と同じ store clock の peek —
+  // comment 書込の created_at と一致し突合成立)。実 clock の遅れで created_at が opts.now とずれた場合は
+  // 投稿後 created_at を読み、不一致なら新 comment で書き直す (旧 comment は突合で却下され勝者にならない)。
+  const at = opts.now ?? opts.at ?? new Date().toISOString();
+  const header = `claimed ${sessionId} at ${at}\n<!-- fp:session ${sessionId} -->`;
   const res = await forge.postComment(issueId, header);
   const noteId = res?.noteId ?? res?.id ?? null;
-  if (!resume && noteId && forge.setCommentBody) {
-    // §3 の正本は created_at — 書き込み後 (mock clock の実秒) に `at` を同期する。
+  if (noteId && forge.commentCreatedAt) {
     const created = await forge.commentCreatedAt(noteId);
-    if (created) await forge.setCommentBody(noteId, `claimed ${sessionId} at ${created}\n<!-- fp:session ${sessionId} -->`);
+    if (created && created !== at) {
+      const rewrite = await forge.postComment(issueId, `claimed ${sessionId} at ${created}\n<!-- fp:session ${sessionId} -->`);
+      return { noteId: rewrite?.noteId ?? rewrite?.id ?? noteId, createdAt: created };
+    }
+    return { noteId, createdAt: created };
   }
   return { noteId, createdAt: res?.createdAt ?? null };
 }
@@ -201,7 +215,9 @@ export function createOrchestrator(deps) {
   /** 敗者にはコメントで通知し、敗者の claim コメントを残す (§3。台帳算入不算入は budget.mjs の author 突合). */
   async function notifyLosers(winner, losers) {
     for (const loser of losers.filter((l) => l.sessionId !== winner.sessionId)) {
-      await forge.postComment(loser.note.issueNumber ?? loser.note.prNumber ?? '', `claim-superseded: 勝者は created_at 先頭の ${winner.sessionId} (§3)\n<!-- fp:session ${loser.sessionId} -->`);
+      const target = loser.note.issueNumber ?? loser.note.prNumber;
+      if (target === null || target === undefined || target === '') continue; // 行番号無しの note は通知先なし (parseId crash 回避)。
+      await forge.postComment(target, `claim-superseded: 勝者は created_at 先頭の ${winner.sessionId} (§3)\n<!-- fp:session ${loser.sessionId} -->`);
     }
   }
 
@@ -228,7 +244,7 @@ export function createOrchestrator(deps) {
     return {
       labels: issue.labels ?? [],
       prState: prStateOf(pr),
-      ciState: ciStateOf(checks, pr?.headSha, config.botActor ?? 'fourth-power-bot'),
+      ciState: ciStateOf(checks, pr?.headSha, config.botActor ?? 'fourth-power-bot', protection?.requiredChecks ?? null),
       threads: (threads ?? []).filter((t) => t.resolved === false).length,
       approvals: approvals ?? [],
       budget,
@@ -423,23 +439,27 @@ export function createOrchestrator(deps) {
   /** child Issue 機械組立 (§5 固定テンプレート: spec 条項参照・accept:<id>・scope 宣言のみ。自由文を本文に MUST NOT). */
   async function assembleChildrenAfterPlanMerge(issue, config) {
     const prs = await forge.prsForIssue(issue.repo, issue.number, { state: 'all' });
+    // §5 冪等化: 再実行で child が無限増殖しないよう既存 bot Issue の title を突合して skip する。
+    const botActor = config.botActor ?? 'fourth-power-bot';
+    const existing = new Set((await forge.scanIssues(issue.repo, { state: 'all' })).filter((i) => i.author === botActor).map((i) => i.title));
     const created = [];
     for (const pr of prs.filter((p) => p.state === 'merged')) {
       const text = typeof forge.prDiff === 'function' ? await forge.prDiff(pr.id) : String(pr.body ?? '');
       for (const child of extractPlanChildren(text)) {
-        const body = childIssueBody(child);
-        const res = await forge.draftIssue({ repo: issue.repo, title: child.title, body, labels: ['backlog'], author: config.botActor ?? 'fourth-power-bot' });
+        if (existing.has(child.title)) continue;
+        const body = childIssueBody(child, issue.number);
+        const res = await forge.draftIssue({ repo: issue.repo, title: child.title, body, labels: ['backlog'], author: botActor });
         created.push({ title: child.title, noteId: res?.id ?? res?.noteId ?? null });
       }
     }
     return created;
   }
 
-  /** plan PR close 時は child Issue を残さない (撤回意味、§3 §5)。botActor 著者の open child を close する (orchestrator scan 窓から)。 */
-  async function closePlanChildren(repo, config) {
+  /** plan PR close 時は child Issue を残さない (撤回意味、§3 §5)。parent link がこのお題の child のみを close する (無関係な bot backlog を踏まない、§4 reviewer 指摘)。 */
+  async function closePlanChildren(repo, config, topicNumber) {
     const issues = await forge.scanIssues(repo, { labels: ['backlog'], state: 'open' });
     const closed = [];
-    for (const i of issues.filter((x) => x.author === (config.botActor ?? 'fourth-power-bot'))) {
+    for (const i of issues.filter((x) => x.author === (config.botActor ?? 'fourth-power-bot') && topicNumber != null && String(x.body ?? '').includes(`"parent":"issue #${topicNumber}"`))) {
       await forge.closeIssue(i.id);
       closed.push(i.id);
     }
@@ -474,10 +494,13 @@ export function extractPlanChildren(text) {
 }
 
 /** child Issue 本文の機械組立 (§5 固定テンプレート: accept:<id> 参照・scope・条項参照のみ). */
-export function childIssueBody(child) {
+export function childIssueBody(child, parentNumber = null) {
   const acceptLines = child.accept.map((a) => `accept: ${a.id}`);
   const refLines = child.refs.map((r) => `spec ${r.replace(/^spec\s+/, '')}`);
-  const fence = JSON.stringify({ accept: child.accept, scope: child.scope, refs: child.refs });
+  const fenceJson = { accept: child.accept, scope: child.scope, refs: child.refs };
+  // 家系 link (§9 鎖定義・§5 撤回判定は parent link で限定 — 無関係な closed child を踏まない)。
+  if (parentNumber !== null && parentNumber !== undefined) fenceJson.parent = `issue #${parentNumber}`;
+  const fence = JSON.stringify(fenceJson);
   const body = [...acceptLines, ...refLines, '```acceptBlock', fence, '```'].join('\n');
   if (rejectsClosesKeyword(body)) throw new Error('child Issue 本文に Closes keyword (§3)');
   return body;

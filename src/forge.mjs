@@ -371,12 +371,6 @@ export function commentCreatedAt(noteId) {
   return raw?.created_at ?? null;
 }
 
-/** comment 本文の書き替え (GitHub PATCH と同意味 — created_at は不変。mock clock 秒の claim 家系 sync 用、§3)。 */
-export function setCommentBody(noteId, body) {
-  api().send('PATCH', notePath(parseId(String(noteId), 'issue')), undefined, { body });
-  return true;
-}
-
 /** GitHub の PR 生応答 (§8 の再照合が mergeable_state を個別読むための写し経路). */
 export function prJson(prId) {
   return api().get(prPath(parseId(prId, 'pr')));
@@ -407,11 +401,12 @@ export function setLabel(issueId, label) {
   const p = parseId(issueId, 'issue');
   const cur = (api().get(issuePath(p)).labels ?? []).map((l) => String(l?.name ?? l));
   const cls = labelClass(label);
-  const added = api().send('POST', `${issuePath(p)}/labels`, undefined, { labels: [label] });
+  // DELETE 先・POST 後 (§1 invariant: 同一クラスの旧ラベルを先に消す — 排他ラベルが一瞬でも 2 本共存する窓を作らない)。
   if (cls) {
     const others = cur.filter((l) => l !== label && labelClass(l) === cls);
     for (const o of others) api().send('DELETE', `${issuePath(p)}/labels/${encodeURIComponent(o)}`);
   }
+  const added = api().send('POST', `${issuePath(p)}/labels`, undefined, { labels: [label] });
   return { added: added ?? null };
 }
 

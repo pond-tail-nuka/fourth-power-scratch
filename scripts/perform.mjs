@@ -157,8 +157,14 @@ async function runP2() {
     const merged = await orchestrator.runIssue(await issueOf(childId));
     childResults.push({ childId, number: child.number, acceptId: block?.accept?.[0]?.id ?? null, turn: turn.transition, merge: merged.transition });
   }
-  // topic は close しない (close は child closed と併走すると re-triage 撤回判定に誤爆する — metrics は撤回のみ介入算入、spec §9。夜間 driver は topic 終端を保留)
-  return { topicId: 'P2', issueId: issue.id, planTurn: plan.planTurn.transition, planPrId: plan.prId, children: childResults };
+  // §3 の順序で topic 終端: 全 child merge 済みなら done → close (metrics は mergedIssueNums で child を
+  // 除外するので撤回誤爆はなし — 完遂鎖、§9。未 merge child が残る場合は close しない)。
+  const allMerged = childResults.length > 0 && childResults.every((r) => r.merge === 'merged');
+  if (allMerged) {
+    await forge.setLabel(issue.id, 'done');
+    forge.closeIssue(issue.id);
+  }
+  return { topicId: 'P2', issueId: issue.id, planTurn: plan.planTurn.transition, planPrId: plan.prId, children: childResults, topicClosed: allMerged };
 }
 
 async function runP3() {

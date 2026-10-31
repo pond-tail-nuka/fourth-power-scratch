@@ -655,7 +655,9 @@ export function runChecks({ checks, workDir, acceptBlock, meta = {} } = {}) {
       case 'status-exclusivity': {
         const issueLabels = meta.issueLabels ?? meta.labels ?? [];
         const stateLabels = issueLabels.filter((l) => STATE_LABELS.has(l) || l.startsWith('blocked/'));
-        if (stateLabels.length > 1) return { ok: false, reason: `exclusive state labels coexist: ${stateLabels.join(', ')}` };
+        // gate.mjs の決定表と同一基準に統一 (§11): done + blocked/* の 2 旗は「close 是正」可能な入力なので許容 (done が状態の正、§3)。
+        const recoverable = issueLabels.length === 2 && issueLabels.includes('done') && issueLabels.some((l) => l.startsWith('blocked/'));
+        if (stateLabels.length > 1 && !recoverable) return { ok: false, reason: `exclusive state labels coexist: ${stateLabels.join(', ')}` };
         return { ok: true };
       }
       case 'sha-approval': {

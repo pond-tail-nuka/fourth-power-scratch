@@ -166,6 +166,9 @@ function analyzeIssue(store, cfg, issue, env) {
   const required = mergedPr === null || isTopic || tierLow ? 0 : (cfg.requiredApprovals ?? 1);
   const approvalSatisfied = required === 0 || store.approvals.some(
     (a) => cfg.humanAccounts.includes(a.reviewer) && a.sha === mergedPr.headSha);
+  // residue 定義は analyzeIssue 内コメント参照 (§2.1/§7)。
+  // topic の終端は merged plan PR が merge record (§5 鎖完遂) — 撤回 (close PR のみ) は record なしなので residue。
+  const topicMergeRecord = (env.topicPlanPrs || []).some((p) => p.state === "merged");
   return {
     id: issue.id, number: issue.number, repo: issue.repo, state, isTopic, isChild, done,
     blocked: state !== null && state.startsWith("blocked/"),
@@ -180,8 +183,8 @@ function analyzeIssue(store, cfg, issue, env) {
     prAttempts: isTopic ? 0 : prs.length,
     gateRejects: isTopic ? 0 : gateRejects(store, cfg, prs),
     requiredApproval: required, approvalSatisfied,
-    // residue (spec 2.1 / 7): done label without close or without merge record
-    residue: done && (issue.state === "open" || mergedPr === null),
+    // residue (spec 2.1 / 7): done label without close or without merge record.
+    residue: done && (issue.state === "open" || (isTopic ? !topicMergeRecord : mergedPr === null)),
     restored: claims.resume,
   };
 }
@@ -257,11 +260,21 @@ export function computeReport(store, options = {}) {
     }
   }
   const childClosedByRetriage = new Set();
+  // 撤回判定は parent link 限定 (§9 鎖定義): このお題に home される child のうち、PR が merged でなく close したもののみ介入 (a)。
+  // 無関係な closed bot Issue (別 topic の child・merge 済み child) を無差別に算入しない (spec §9)。
+  const mergedIssueNums = new Set();
+  for (const p of store.prs) {
+    if (p.state !== 'merged') continue;
+    const m = /#(\d+)/.exec(p.body || '');
+    if (m) mergedIssueNums.add(Number(m[1]));
+  }
+  const topicByNumber = new Map(topics.map((t) => [t.number, t]));
   for (const t of topics) {
     const chainPrs = planPrsByTopic.get(t.number) || [];
     if (chainPrs.some((p) => p.state === "closed") || t.state === "closed") {
       for (const c of issues) {
-        if (c.author === cfg.botActor && planHeaderOf(c.body) === null && c.state === "closed") {
+        if (c.author === cfg.botActor && planHeaderOf(c.body) === null && c.state === "closed" &&
+          String(c.body).includes(`"parent":"issue #${t.number}"`) && !mergedIssueNums.has(c.number)) {
           childClosedByRetriage.add(c.id);
         }
       }
@@ -286,6 +299,9 @@ export function computeReport(store, options = {}) {
   const sortedTopics = [...topics].sort((a, b) => (isoSec(a.createdAt) ?? 0) - (isoSec(b.createdAt) ?? 0));
   const chainOfTopic = (r) => {
     const issue = issueByNumber.get(r.number);
+    // parent link が家系の正 (§9 鎖定義)。link 無しは従来 heuristic (createdAt 順) にフォールバック。
+    const pm = /"parent":"issue #(\d+)"/.exec(String(issue?.body ?? ""));
+    if (pm) { const t = topicByNumber.get(Number(pm[1])); if (t) return t; }
     let chosen = null;
     for (const t of sortedTopics) if ((isoSec(t.createdAt) ?? 0) <= (isoSec(issue.createdAt) ?? 0)) chosen = t;
     return chosen || sortedTopics[0] || null;

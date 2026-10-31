@@ -698,24 +698,23 @@ function mergePull(r, repoKey, number, method) {
     throw new HttpError(409, `pull ${number} mergeable=${view.mergeable_state} — gate 再照合 fail (§8 race)`);
   }
   const methodNorm = ['squash', 'merge', 'rebase'].includes(method) ? method : 'squash';
-  if (methodNorm === 'squash') {
-    const required = r.protection?.required_status_checks?.contexts ?? [];
-    const runs = [...(r.checks.get(pr.headSha) ?? [])];
-    const byName = new Map(runs.map((c) => [c.name, c]));
-    for (const name of required) {
-      const c = byName.get(name);
-      if (!c || c.status !== 'completed' || c.conclusion !== 'success') {
-        throw new HttpError(409, `required check ${name} が green でない (head ${pr.headSha}) — マージ阻止 (invariant 4)`);
-      }
+  // GitHub の branch protection は commit_method を問わず required check / 承認 / thread を強制 (§2 invariant 4・§8)。
+  const required = r.protection?.required_status_checks?.contexts ?? [];
+  const runs = [...(r.checks.get(pr.headSha) ?? [])];
+  const byName = new Map(runs.map((c) => [c.name, c]));
+  for (const name of required) {
+    const c = byName.get(name);
+    if (!c || c.status !== 'completed' || c.conclusion !== 'success') {
+      throw new HttpError(409, `required check ${name} が green でない (head ${pr.headSha}) — マージ阻止 (invariant 4)`);
     }
-    const approvals = (r.reviews.get(number) ?? []).filter((rv) => rv.state === 'APPROVED' && rv.commit_id === pr.headSha);
-    const need = r.protection?.required_pull_request_reviews?.required_approving_review_count ?? 0;
-    if (approvals.length < need) {
-      throw new HttpError(409, `承認 ${approvals.length}/${need} — マージ阻止 (§8 protection 承認数・sha-approval の二重検証写し)`);
-    }
-    const openThreads = [...r.threads.values()].filter((t) => t.pr_number === number && !t.resolved).length;
-    if (openThreads > 0) throw new HttpError(409, `open review thread ${openThreads} — review-threads fail (§8)`);
   }
+  const approvals = (r.reviews.get(number) ?? []).filter((rv) => rv.state === 'APPROVED' && rv.commit_id === pr.headSha);
+  const need = r.protection?.required_pull_request_reviews?.required_approving_review_count ?? 0;
+  if (approvals.length < need) {
+    throw new HttpError(409, `承認 ${approvals.length}/${need} — マージ阻止 (§8 protection 承認数・sha-approval の二重検証写し)`);
+  }
+  const openThreads = [...r.threads.values()].filter((t) => t.pr_number === number && !t.resolved).length;
+  if (openThreads > 0) throw new HttpError(409, `open review thread ${openThreads} — review-threads fail (§8)`);
   if (mergeHandler) {
     const res = mergeHandler({ repoKey, prNumber: number, method: methodNorm, headSha: pr.headSha, baseRef: pr.base });
     lastMerge = { repoKey, prNumber: number, method: methodNorm, commitSha: res?.commit_sha ?? null };

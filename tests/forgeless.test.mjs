@@ -9,7 +9,7 @@ import { createForgelessHarness } from './forgeless/harness.mjs';
 import { STATUS_SRC, seedAcceptFiles, parseTopic, fenceOf, childSectionText } from './perform/accept-src.mjs';
 import { startTurn as stubStartTurn } from '../src/stubSeat.mjs';
 import { runChecks } from '../src/runner.mjs';
-import { branchName, hasAcceptClauses } from '../src/loop.mjs';
+import { branchName, hasAcceptClauses, ciStateOf } from '../src/loop.mjs';
 
 const REPO = 'fourth-power/mock-scratch';
 const BOT = 'fourth-power-bot';
@@ -135,6 +135,8 @@ test('期待する人間挙動: plan PR の承認→マージ = 介入 (d) → c
     assert.ok(child.labels.includes('backlog'));
     assert.ok(hasAcceptClauses(child.body));
   }
+  assert.ok(h.forge.issue(created[0].noteId).body.includes(`"parent":"issue #${issue.number}"`), '§9 鎖定義: child に parent link');
+  assert.deepEqual(await h.orchestrator.assembleChildrenAfterPlanMerge(h.forge.issue(issue.id), h.config), [], '§5 冪等化: 再実行で child を重複起票しない');
   assert.ok(h.forge.issue(created[0].noteId).body.includes('accept: A21-A'));
   setFixture('p2-child-implement.json');
   for (const c of created) {
@@ -196,7 +198,8 @@ test('人間挙動: topic re-triage → child close は介入 (a) 計上 (§9 �
   const { h } = makeHarness();
   const topic = parseTopic('P2.md');
   const t = h.forge.draftIssue({ repo: REPO, title: topic.front.title ?? 'P2 topic', body: topic.body, labels: ['backlog'], author: h.human.reviewer });
-  const child = h.forge.draftIssue({ repo: REPO, title: 'child issue', body: `accept: A1\nspec §2.1\n\`\`\`acceptBlock\n${fenceOf(p1Topic().body)}\n\`\`\``, labels: ['backlog'], author: BOT });
+  const childFence = fenceOf(p1Topic().body).replace('{"accept"', `{"parent":"issue #${t.number}","accept"`);
+  const child = h.forge.draftIssue({ repo: REPO, title: 'child issue', body: `accept: A1\nspec §2.1\n\`\`\`acceptBlock\n${childFence}\n\`\`\``, labels: ['backlog'], author: BOT });
   h.human.retriage(child.id);
   h.forge.closeIssue(t.id);
   assert.equal(h.forge.issue(child.id).state, 'closed');
@@ -204,4 +207,43 @@ test('人間挙動: topic re-triage → child close は介入 (a) 計上 (§9 �
   const rep = h.metrics();
   assert.equal(rep.autonomy.interventions.a, 1);
   assert.equal(rep.autonomy.interventions.total, 1);
+});
+
+test('人間逸脱: protection は commit_method を問わず効く — red/未承認 PR は merge/rebase でも阻止 (迂回対, §2 invariant 4)', async () => {
+  const { h } = makeHarness();
+  const issue = mkP1Issue(h);
+  await h.claimAndLabel(issue, 'sess-fl-bypass-01');
+  const pr = greenBranch(h, issue);
+  assert.throws(() => h.forge.mergePR(pr.id, 'merge'), /required check .* green でない|409/);
+  assert.throws(() => h.forge.mergePR(pr.id, 'rebase'), /required check .* green でない|409/);
+  // green + 承認揃いなら method を問わず成立 (§8 再照合は全 method 共通)。
+  h.forge.readyPR(pr.id);
+  await h.runChecksOnPR(pr.id);
+  h.human.approveAtHead(pr.id);
+  await h.forge.setLabel(issue.id, 'in_review');
+  await h.runChecksOnPR(pr.id);
+  h.forge.mergePR(pr.id, 'rebase');
+  assert.equal(h.forge.prJson(pr.id).merged_at !== null || h.forge.prsForIssue(REPO, issue.number, { state: 'all' }).some((p) => p.state === 'merged'), true);
+});
+
+test('required check 欠落は pending — 決定表が submit に誤爆せずマージしない (§7)', async () => {
+  const { h } = makeHarness();
+  const issue = mkP1Issue(h);
+  await h.claimAndLabel(issue, 'sess-fl-missing-01');
+  const pr = greenBranch(h, issue);
+  h.forge.readyPR(pr.id);
+  h.forge.postCheck(pr.id, { name: 'accept', state: 'success' }, BOT); // accept だけを投稿し他の required は未投稿
+  h.human.approveAtHead(pr.id);
+  await h.forge.setLabel(issue.id, 'in_review');
+  const res = await h.orchestrator.runIssue(h.forge.issue(issue.id));
+  assert.notEqual(res.transition, 'merged');
+  assert.notEqual(h.forge.prJson(pr.id).state, 'merged');
+});
+
+test('unit: ciStateOf は required 欠落を pending とみなす (green 誤爆しない、§7 §8)', () => {
+  const single = [{ name: 'accept', state: 'success', headSha: 'h1', issuer: 'fourth-power-bot' }];
+  assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', ['fourth-power-accept', 'accept']), 'pending');
+  assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', ['accept']), 'green');
+  assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', null), 'green');
+  assert.equal(ciStateOf([...single, { name: 'fourth-power-accept', state: 'failure', headSha: 'h1', issuer: 'fourth-power-bot' }], 'h1', 'fourth-power-bot', ['fourth-power-accept', 'accept']), 'red');
 });

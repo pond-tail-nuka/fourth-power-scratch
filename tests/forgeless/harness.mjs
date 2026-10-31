@@ -135,7 +135,6 @@ export function createForgelessHarness({ repoKey = 'fourth-power/mock-scratch', 
   };
   forge.repoLabels = (repo) => mockServer.apiGet(`/repos/${repo ?? repoKey}/labels`).map((l) => (typeof l === 'string' ? l : l.name));
   forge.commentCreatedAt = (noteId) => mockServer.apiGet(notePathOf(String(noteId)))?.created_at ?? null;
-  forge.setCommentBody = (noteId, body) => { mockServer.apiSend('PATCH', notePathOf(String(noteId)), {}, { body }); return true; };
   forge.prJson = (prId) => { const p = parsePr(prId); return mockServer.apiGet(prPathOf(p.repo, p.number)); };
 
   forge.draftIssue = ({ repo = repoKey, title, body = '', labels = [], author } = {}) =>

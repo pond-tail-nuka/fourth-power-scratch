@@ -30,6 +30,8 @@ const claimBody = (sess, at) => `claimed ${sess} at ${at}\n<!-- fp:session ${ses
 const turnBody = (sess, cost, sec, at) =>
   `submit <!-- fp:summary ${sess} --> budget: consumed_usd=${cost} consumed_seconds=${sec} at ${at} <!-- fp:session ${sess} -->`;
 const acceptBody = `x\n\`\`\`acceptBlock\n{"accept":[{"id":"A1","kind":"test","cmd":"node --test tests/a.test.mjs"}]}\n\`\`\`\n`;
+// §9 鎖定義 (parent link) を含む child 本文 (§5 テンプレート写し)。
+const childBody = (parent) => acceptBody.replace('{"accept"', `{"parent":"issue #${parent}","accept"`);
 const mkStore = (parts) => ({ issues: [], prs: [], notes: [], checks: [], approvals: [], threads: [], ...parts });
 
 function cleanChainStore() {
@@ -109,7 +111,7 @@ test("interventions (a) re-triage, (b) accept edit, (d) plan close counted", () 
   const store = mkStore({
     issues: [
       mkIssue(1, { body: "plan: topic", author: HUMAN }), // plan PR closed -> (d)
-      mkIssue(2, { author: BOT, body: acceptBody, state: "closed" }), // closed child -> (a) via retriage
+      mkIssue(2, { author: BOT, body: childBody(1), state: "closed" }), // closed child -> (a) via retriage (parent link #1)
       mkIssue(3, { labels: ["backlog"] }), // re-triaged with closed PR -> (a)
       mkIssue(4, {}), // accept edited -> (b)
     ],
@@ -124,6 +126,38 @@ test("interventions (a) re-triage, (b) accept edit, (d) plan close counted", () 
   assert.deepEqual(r.autonomy.interventions, { a: 2, b: 1, c: 0, d: 1, total: 4 });
   assert.deepEqual(r.autonomy.topicChain, { issues: 0, cleanDone: 0, rate: 0 }); // withdrawn chain excluded
 });
+test("retriage scoped by parent link: 別 topic の child・merge 完了 child は介入 (a) 不算入 (誤爆対)", () => {
+  const store = mkStore({
+    issues: [
+      mkIssue(1, { body: "plan: topic", author: HUMAN, state: "closed" }), // topic A closed = 撤回
+      mkIssue(2, { author: BOT, body: childBody(1), state: "closed" }),    // A の child・未 merge close → (a)
+      mkIssue(3, { author: BOT, body: childBody(30), state: "closed", labels: ["done"] }), // B の child・PR merged → 完遂なので不算入
+      mkIssue(30, { body: "plan: topic", author: HUMAN }), // topic B open (撤回でなし)
+      mkIssue(31, { author: BOT, body: childBody(30), state: "closed" }), // B の child で B open → 撤回対象外
+    ],
+    prs: [mkPR(60, { body: "squash(#3)", state: "merged", headSha: "shaC" })],
+  });
+  const r = computeReport(store);
+  assert.equal(r.autonomy.interventions.a, 1);
+});
+
+test("topic closed かつ全 child merge 済み = 鎖完遂 (撤回誤爆しない — P2 driver の終端形)", () => {
+  const store = mkStore({
+    issues: [
+      mkIssue(1, { body: "plan: topic", author: HUMAN, state: "closed", labels: ["done"] }),
+      mkIssue(2, { author: BOT, body: childBody(1), state: "closed", labels: ["done"] }),
+      mkIssue(9, { author: "fourth-power-bot", body: acceptBody, state: "closed" }), // parent link なし = 無関係な closed bot Issue
+    ],
+    prs: [
+      mkPR(10, { body: "plan sess-p #1", state: "merged", headSha: "shaP", author: HUMAN }),
+      mkPR(70, { body: "squash(#2)", state: "merged", headSha: "sha70" }),
+    ],
+  });
+  const r = computeReport(store);
+  // plan PR merge は介入 d (§9 正当)。誤爆 a は 0、child merge 完遂なので a 加算なし。
+  assert.deepEqual(r.autonomy.interventions, { a: 0, b: 0, c: 0, d: 1, total: 1 });
+});
+
 test("human approval is not an intervention but counts as required approval", () => {
   const store = mkStore({
     issues: [mkIssue(6, { labels: ["done"], state: "closed" })],

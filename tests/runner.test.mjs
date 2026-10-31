@@ -224,6 +224,8 @@ test('status-exclusivity: two state labels on one Issue -> failure (spec §11 la
     assert.equal(stateOf(dup, 'status-exclusivity'), 'failure');
     const dupBlocked = runChecks({ checks: ['status-exclusivity'], workDir: dir, acceptBlock: BLOCK, meta: baseMeta({ issueLabels: ['blocked/budget', 'blocked/spec-gap'] }) });
     assert.equal(stateOf(dupBlocked, 'status-exclusivity'), 'failure');
+    const doneBlocked = runChecks({ checks: ['status-exclusivity'], workDir: dir, acceptBlock: BLOCK, meta: baseMeta({ issueLabels: ['done', 'blocked/budget'] }) });
+    assert.equal(stateOf(doneBlocked, 'status-exclusivity'), 'success', 'done + blocked 1 本は close 是正を許容 (gate.mjs の決定表と同一基準、§11 §3)');
     const one = runChecks({ checks: ['status-exclusivity'], workDir: dir, acceptBlock: BLOCK, meta: baseMeta({ issueLabels: ['claimed', 'cohort:typical'] }) });
     assert.equal(stateOf(one, 'status-exclusivity'), 'success', 'non-state labels do not count');
   } finally { rmSync(dir, { recursive: true, force: true }); }
