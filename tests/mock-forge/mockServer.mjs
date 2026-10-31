@@ -513,6 +513,17 @@ function doPost(r, repoKey, cmd, pathname, params, body) {
     const sha = body.sha ?? body.object?.sha;
     if (!sha) throw new HttpError(400, 'git refs POST requires sha');
     r.branches.set(ref, sha);
+    // protection.dismiss_stale_reviews の GitHub 意味 — 新 commit で旧 head SHA 紐りの APPROVED は dismiss される
+    // (§8 stale 承認: 人間は新 sha への再承認が必須 — 放置は gate が検出するが、protection 設定時は自動 dismiss)。
+    if (r.protection?.required_pull_request_reviews?.dismiss_stale_reviews) {
+      for (const pr of r.prs.values()) {
+        if (pr.headRef === ref && !pr.merged_at) {
+          pr.headSha = sha; // GitHub の PR head は branch ref に追随する (§8 の突合は最新 commit SHA に対して行う)
+          const kept = (r.reviews.get(pr.number) ?? []).filter((rv) => rv.commit_id === sha || rv.state !== 'APPROVED');
+          r.reviews.set(pr.number, kept);
+        }
+      }
+    }
     return { ref: `refs/heads/${ref}`, object: { sha } };
   }
   if (cmd[0] === 'contents') {
@@ -647,6 +658,15 @@ function doDelete(r, repoKey, cmd, pathname, params, body) {
   if (cmd[0] === 'pulls' && cmd[1] === 'comments' && cmd.length === 3) {
     const id = num(cmd[2], pathname);
     if (!r.threads.delete(id)) throw new HttpError(404, `no review comment ${id}`);
+    return null;
+  }
+  if (cmd[0] === 'pulls' && cmd[2] === 'reviews' && cmd.length === 4) {
+    const n = num(cmd[1], pathname);
+    const id = num(cmd[3], pathname);
+    const list = r.reviews.get(n) ?? [];
+    const rest = list.filter((rv) => rv.id !== id);
+    if (rest.length === list.length) throw new HttpError(404, `no review ${id} in pr ${n}`);
+    r.reviews.set(n, rest);
     return null;
   }
   if (cmd[0] === 'labels' && cmd.length === 2) {

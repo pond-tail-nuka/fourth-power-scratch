@@ -15,9 +15,9 @@ import { computeReport } from '../src/metrics.mjs';
 import * as executor from '../tests/mock-forge/executor.mjs';
 import * as mockServer from '../tests/mock-forge/mockServer.mjs';
 import * as store from '../tests/mock-forge/store.mjs';
+import { STATUS_SRC, seedAcceptFiles, parseTopic, childSectionText } from '../tests/perform/accept-src.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
-const TOPICS = join(ROOT, '..', 'tests', 'perform', 'topics');
 const REPO = 'fourth-power/mock-scratch';
 const HUMAN = 'pond-tail-nuka';
 const BOT = 'fourth-power-bot';
@@ -31,17 +31,6 @@ function parseArgs(argv) {
   }
   return out;
 }
-function parseTopic(file) {
-  const raw = readFileSync(join(TOPICS, file), 'utf8');
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  const front = Object.fromEntries(m[1].split('\n').map((l) => l.split(/:\s*(.*)/)).map(([k, v]) => [k.trim(), v == null ? '' : v.trim()]));
-  return { front, body: m[2].trim() };
-}
-function fenceOf(body) {
-  const m = /```acceptBlock\s*\n([\s\S]*?)\n```/.exec(body);
-  return m ? m[1].trim() : null;
-}
-
 let config;
 let gitDir;
 let orchestrator;
@@ -77,76 +66,6 @@ function postLedgerRow(issueId, sessionId, turn, cost, seconds, at) {
   forge.postComment(issueId, `budget: consumed_usd=${cost} consumed_seconds=${seconds} at ${at}\n<!-- fp:summary resume ${at} -->\n<!-- fp:session ${sessionId} -->`);
 }
 
-const STATUS_SRC = `#!/usr/bin/env node
-// scripts/status.mjs — read-only projection (spec §2.1: read 経路のみ・書込みなし — A1 実装)。
-// --json: 固定 offline 投影 {schemaVersion, issues[], maxAgeSec} (PROPOSAL §14 B)。table: 行を ASCII 出力。
-const flags = process.argv.slice(2);
-const json = flags.includes('--json');
-const offline = flags.includes('--offline');
-if (!offline) {
-  console.error('status.mjs: --offline のみ対応 (本番 provider は §11 mock bullet — 夜間は offline 固定)');
-  process.exit(1);
-}
-const projection = {
-  schemaVersion: 1,
-  issues: [{ repo: 'mock/fourth_power', number: 1, statusLabel: 'backlog', written: false }],
-  maxAgeSec: 30,
-};
-if (json) process.stdout.write(JSON.stringify(projection));
-else process.stdout.write('fp-status-table\\nmock/fourth_power 1 backlog\\n');
-`;
-
-const A21_A = `// ci/accept/a21-a.test.mjs — A21-A (child 機械組立 accept 本体 — plan PR 起票済み・改変禁止)。
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-const STATUS = fileURLToPath(new URL('../../scripts/status.mjs', import.meta.url));
-function run(args) {
-  return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [STATUS, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = ''; let err = '';
-    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { err += d; });
-    p.on('error', reject);
-    p.on('close', (code) => resolve({ code, out, err }));
-  });
-}
-test('A21-A --json projection (read-only)', async () => {
-  const r = await run(['--json', '--provider', 'mock', '--offline']);
-  assert.equal(r.code, 0, r.err);
-  const j = JSON.parse(r.out);
-  assert.equal(j.schemaVersion, 1);
-  assert.ok(Array.isArray(j.issues));
-  for (const row of j.issues) {
-    assert.equal(typeof row.statusLabel, 'string');
-    assert.equal(row.written, false);
-  }
-});
-`;
-
-const A21_B = `// ci/accept/a21-b.test.mjs — A21-B (stale banner — ui 間隔超過の stale 表示、spec §2.6 ui key)。
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-const STATUS = fileURLToPath(new URL('../../scripts/status.mjs', import.meta.url));
-function run(args) {
-  return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [STATUS, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = ''; let err = '';
-    p.stdout.on('data', (d) => { out += d; }); p.stderr.on('data', (d) => { err += d; });
-    p.on('error', reject);
-    p.on('close', (code) => resolve({ code, out, err }));
-  });
-}
-test('A21-B stale banner 間隔は ui.readIntervalSec と一致 (投影 maxAgeSec)', async () => {
-  const r = await run(['--json', '--provider', 'mock', '--offline']);
-  assert.equal(r.code, 0, r.err);
-  const j = JSON.parse(r.out);
-  assert.equal(j.maxAgeSec, 30, 'stale banner 間隔 = config ui.readIntervalSec (§2.6)');
-});
-`;
-
 function setup() {
   mockServer.resetMock({
     baseISO: EPOCH,
@@ -166,17 +85,15 @@ function setup() {
     mockServer.apiSend('POST', `/repos/${REPO}/labels`, {}, { name }); // bootstrap の label materialize 写し (§2.6 §8 config-consistency)
   }
   executor.writeAndPush(REPO, 'fp/seed-accept', {
-    'tests/perform/topics/fixtures/p1.test.mjs': readFileSync(join(ROOT, '..', 'tests/perform/topics/fixtures/p1.test.mjs'), 'utf8'),
-    'tests/perform/topics/fixtures/p3-vacuous.test.mjs': readFileSync(join(ROOT, '..', 'tests/perform/topics/fixtures/p3-vacuous.test.mjs'), 'utf8'),
-    'ci/accept/a21-a.test.mjs': A21_A,
-    'ci/accept/a21-b.test.mjs': A21_B,
+    ...seedAcceptFiles(),
   }, 'seed: accept fixtures (人間起票済み・改変禁止)', gitDir);
   // main への seed は人間起票経路 (§2 不変条件 2: direct push 禁止 — bare 側で fast-forward 相当の setup 操作)。
   const ff = spawnSync('git', ['--git-dir', gitDir, 'push', gitDir, 'refs/heads/fp/seed-accept:refs/heads/main'], { cwd: ROOT, encoding: 'utf8' });
   if (ff.status !== 0) throw new Error(`seed main ff push failed: ${ff.stderr}`);
   executor.syncBranchCache(REPO, gitDir);
   config = forge.readConfig();
-  orchestrator = createOrchestrator({ forge, seat: stubSeat, config, clock: () => new Date().toISOString() });
+  // 台帳・budget の wall clock 照合は mock 固定時計 (§3 の created_at と同一源 — 実時刻依存を排除、spec §7 決定論)。
+  orchestrator = createOrchestrator({ forge, seat: stubSeat, config, clock: () => store.clock().peek() });
 }
 
 async function runP1() {
@@ -218,7 +135,7 @@ async function runP2() {
     { id: 'A21-A', title: 'status.mjs --json 出力本体', cmd: 'node --test ci/accept/a21-a.test.mjs', scope: ['scripts/status.mjs'], refs: ['spec §2.1', 'spec §4.3', 'spec §5'] },
     { id: 'A21-B', title: 'status.mjs --json stale banner', cmd: 'node --test ci/accept/a21-b.test.mjs', scope: ['scripts/status.mjs'], refs: ['spec §2.6', 'spec §6'] },
   ];
-  const text = children.map((c) => `#### child issue: ${c.title}\nspec ${c.refs.join(' ')}\naccept: ${c.id}\n\`\`\`acceptBlock\n${JSON.stringify({ accept: [{ id: c.id, kind: 'test', cmd: c.cmd }], scope: c.scope, refs: c.refs })}\n\`\`\``).join('\n\n');
+  const text = childSectionText(children);
   const plan = await runPlanPr(topic, issue, 'docs/plan/issue-21-status-json.json', { text, children }, 'sess-p2-plan-01', 'plan PR accept 代替 — docs/governance 整合性 (§17・§4.4)');
   forge.mergePR(plan.prId, 'squash'); // 人間判断の plan PR merge = 介入 (d) (spec §9)
   const created = await orchestrator.assembleChildrenAfterPlanMerge(await issueOf(issue.id), config);
