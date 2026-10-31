@@ -269,7 +269,7 @@ test('comment edit は created_at を変えない (§3 の fixture 回帰 — �
   assert.equal(forge.notes(issue.id).length, 0);
 });
 
-test('復元 claim comment (resume header) は家系突合で通過し、勝者を上書きしない (§3/§7 — orchestrator の復元が mock で失われない)', () => {
+test('復元 claim comment (resume header) はlineage 突合で通過し、勝者を上書きしない (§3/§7 — orchestrator の復元が mock で失われない)', () => {
   executor.setupMock({ repoKey: REPO });
   const issue = forge.draftIssue({ repo: REPO, title: 'resume lineage', body: 'spec §3 §7', author: HUMAN });
   const first = forge.postComment(issue.id, `claimed sess-a at ${store.clock().peek()}\n<!-- fp:session sess-a -->`, { author: BOT });
@@ -278,15 +278,15 @@ test('復元 claim comment (resume header) は家系突合で通過し、勝者�
   const resumedIso = store.clock().peek();
   const resumeBody = `claimed sess-a at ${at} resumed ${resumedIso}\n<!-- fp:session sess-a -->`;
   const resume = forge.postComment(issue.id, resumeBody, { author: BOT });
-  // 復元 comment は新しい comment だが header の at が元 claim の created_at を保持 — 厳密一致 (created_at は resume 時刻) では §3 の偽装と見なされ却下される。家系なので通過する MUST 挙動 (§7).
-  assert.equal(store.createdAtMatchesBodyAt(resume.createdAt, resumeBody), true, 'resume header は却下しない (created_at ≠ at でも家系)');
+  // 復元 comment は新しい comment だが header の at が元 claim の created_at を保持 — 厳密一致 (created_at は resume 時刻) では §3 の偽装と見なされ却下される。lineageなので通過する MUST 挙動 (§7).
+  assert.equal(store.createdAtMatchesBodyAt(resume.createdAt, resumeBody), true, 'resume header は却下しない (created_at ≠ at でもlineage)');
   assert.ok(resume.createdAt > at, '復元 comment の created_at は後刻 (header の at とは違う)');
   const notes = forge.notes(issue.id).filter((n) => store.parseClaimBody(n.body) !== null);
   assert.equal(notes.length, 2);
   const { winner, rejected } = store.pickClaimWinner(notes);
   assert.equal(store.parseClaimBody(winner.body).kind, 'claim', '元 claim が勝者 (復元 comment が後着で上書きしない)');
   assert.equal(winner.createdAt, at);
-  assert.deepEqual(rejected, [], '復元 comment は却下されない (家系証拠)。元 claim 勝者で同一 session は集約');
+  assert.deepEqual(rejected, [], '復元 comment は却下されない (lineage 証拠)。元 claim 勝者で同一 session は集約');
   // 元 claim が失われた想定 (record 消失): 復元 comment 単独が claim 証拠として成立する
   const rawWinner = mockServer.apiGet(`repos/${REPO}/issues/${issue.number}/comments`).find((c) => store.parseClaimBody(c.body).kind === 'claim');
   mockServer.apiSend('DELETE', `repos/${REPO}/issues/comments/${rawWinner.id}`);

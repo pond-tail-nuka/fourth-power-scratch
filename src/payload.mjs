@@ -61,7 +61,7 @@ export function planComment(sessionId) {
 /**
  * Issue 本文から ```acceptBlock fence JSON を 1 つ parse する (contract §11)。
  * fence が 1 つより多い場合は先頭のみ (規約は 1 つ置く MUST)。
- * 欠損・JSON 不正・期待 shape 外は null (対象外返し、spec §5)。
+ * 欠損・JSON 不正・期待 shape 外は null (対象外返却、spec §5)。
  * 本文の自由文は読まない — fence 内のみが条項の正。
  */
 export function parseAcceptBlock(body) {
@@ -114,8 +114,8 @@ function buildSections({ refsFull, refsIdOnly, accept, scope }) {
  * payloadText = 参照条項テキスト (refs の spec § ID のテキスト版を specClauses マップから引いて結合) +
  *               acceptBlock 条項 + scope 宣言のみ (spec §5「参照条項のみ添付 MUST」、§6 上限対象)。
  * contextBudget 超過の間引き順 (acceptBlock 優先):
- *   1. 参照条項の本文を落として ID 行のみにする
- *   2. 参照条項 section を丸ごと落とす
+ *   1. 参照条項の本文を除外して ID 行のみにする
+ *   2. 参照条項 section を丸ごと除外する
  *   3. accept・scope 決定論行を末尾から決定的 truncation (spec §6「truncation 結合」)
  */
 export function assemblePayload(issue, config, specClauses = {}) {

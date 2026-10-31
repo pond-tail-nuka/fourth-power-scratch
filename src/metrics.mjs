@@ -167,7 +167,7 @@ function analyzeIssue(store, cfg, issue, env) {
   const approvalSatisfied = required === 0 || store.approvals.some(
     (a) => cfg.humanAccounts.includes(a.reviewer) && a.sha === mergedPr.headSha);
   // residue 定義は analyzeIssue 内コメント参照 (§2.1/§7)。
-  // topic の終端は merged plan PR が merge record (§5 鎖完遂) — 撤回 (close PR のみ) は record なしなので residue。
+  // topic の終端は merged plan PR が merge record (§5 チェーン完遂) — 撤回 (close PR のみ) は record なしなので residue。
   const topicMergeRecord = (env.topicPlanPrs || []).some((p) => p.state === "merged");
   return {
     id: issue.id, number: issue.number, repo: issue.repo, state, isTopic, isChild, done,
@@ -260,8 +260,8 @@ export function computeReport(store, options = {}) {
     }
   }
   const childClosedByRetriage = new Set();
-  // 撤回判定は parent link 限定 (§9 鎖定義): このお題に home される child のうち、PR が merged でなく close したもののみ介入 (a)。
-  // 無関係な closed bot Issue (別 topic の child・merge 済み child) を無差別に算入しない (spec §9)。
+  // 撤回判定は parent link 限定 (§9 チェーン定義): このお題に home される child のうち、PR が merged でなく close したもののみ介入 (a)。
+  // 無関係な closed bot Issue (別 topic の child・マージ済み child) を無差別に算入しない (spec §9)。
   const mergedIssueNums = new Set();
   for (const p of store.prs) {
     if (p.state !== 'merged') continue;
@@ -299,7 +299,7 @@ export function computeReport(store, options = {}) {
   const sortedTopics = [...topics].sort((a, b) => (isoSec(a.createdAt) ?? 0) - (isoSec(b.createdAt) ?? 0));
   const chainOfTopic = (r) => {
     const issue = issueByNumber.get(r.number);
-    // parent link が家系の正 (§9 鎖定義)。link 無しは従来 heuristic (createdAt 順) にフォールバック。
+    // parent link が親子関係の正 (§9 チェーン定義)。link 無しは従来 heuristic (createdAt 順) にフォールバック。
     const pm = /"parent":"issue #(\d+)"/.exec(String(issue?.body ?? ""));
     if (pm) { const t = topicByNumber.get(Number(pm[1])); if (t) return t; }
     let chosen = null;

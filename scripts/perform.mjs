@@ -157,8 +157,8 @@ async function runP2() {
     const merged = await orchestrator.runIssue(await issueOf(childId));
     childResults.push({ childId, number: child.number, acceptId: block?.accept?.[0]?.id ?? null, turn: turn.transition, merge: merged.transition });
   }
-  // §3 の順序で topic 終端: 全 child merge 済みなら done → close (metrics は mergedIssueNums で child を
-  // 除外するので撤回誤爆はなし — 完遂鎖、§9。未 merge child が残る場合は close しない)。
+  // §3 の順序で topic 終端: 全 child マージ済みなら done → close (metrics は mergedIssueNums で child を
+  // 除外するので誤撤回はなし — 完了チェーン、§9。未マージ child が残る場合は close しない)。
   const allMerged = childResults.length > 0 && childResults.every((r) => r.merge === 'merged');
   if (allMerged) {
     await forge.setLabel(issue.id, 'done');
@@ -186,7 +186,7 @@ async function runP3() {
   for (const [turn, cost, seconds, at] of rows) postLedgerRow(b.id, 'sess-p3-budget-01', turn, cost, seconds, at);
   const bRes = await orchestrator.runIssue(await issueOf(b.id));
   results.budget = { issueId: b.id, transition: bRes.transition, labels: (await issueOf(b.id)).labels };
-  // P3c: accept-vacuous 注入 — runner が accept-vacuity + accept red MUST (spec §4.5 §10 M5 false green 対)
+  // P3c: accept-vacuous 注入 — runner が accept-vacuity + accept red MUST (spec §4.5 §10 M5 false green 対策)
   const fenceC = [...topic.body.matchAll(/```acceptBlock\n([\s\S]*?)\n```/g)][1][1];
   const c = mkIssue({ title: 'P3c: accept-vacuous 注入', body: ['vacuous accept 注入', '', '```acceptBlock', fenceC, '```'].join('\n') });
   await claimAndLabel(c, 'sess-p3-vacuous-01');
@@ -279,10 +279,10 @@ async function main() {
 
   // 期待値照合 (spec §10 M5 の視点グループと お題 front の期待の突合)
   const r1 = results.P1;
-  if (r1) expect(r1.merged, 'P1: merged 着弾 MUST', fail);
+  if (r1) expect(r1.merged, 'P1: merged 到達 MUST', fail);
   const p2 = results.P2;
   if (p2) {
-    expect(p2.planTurn === 'plan', `P2: plan turn 着弾 MUST (got ${p2.planTurn})`, fail);
+    expect(p2.planTurn === 'plan', `P2: plan turn 到達 MUST (got ${p2.planTurn})`, fail);
     expect(p2.children.length === 2, `P2: child 2 起票 MUST (got ${p2.children.length})`, fail);
     for (const c of p2.children) expect(c.merge === 'merged', `P2 child #${c.number}: merged MUST (got ${c.merge})`, fail);
   }

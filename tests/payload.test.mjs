@@ -1,5 +1,5 @@
 // tests/payload.test.mjs — payload 組立の回帰 (spec §5・§6・§7・§12 / contract §11)
-// fence 専用 parse・対象外返し・間引き挙動・record helper 書式固定をここで固定する。
+// fence 専用 parse・対象外返却・間引き挙動・record helper 書式固定をここで固定する。
 // 他モジュール (gate/seat/forge) は呼ばない。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,11 +53,11 @@ test('自由文は条項にしない: fence 外の accept 相当・refs 相当�
   assert.deepEqual(p.accept, [{ id: 'A1', kind: 'test', cmd: 'node --test tests/payload.test.mjs' }]);
 });
 
-test('fence 欠損は対象外返し (null) / JSON 不正・shape 外も null', () => {
+test('fence 欠損は対象外返却 (null) / JSON 不正・shape 外も null', () => {
   assert.equal(assemblePayload(issue('acceptBlock fence 無し本文'), CONFIG, {}), null);
   assert.equal(assemblePayload(issue(''), CONFIG, {}), null);
   assert.equal(assemblePayload(issue(undefined), CONFIG, {}), null);
-  assert.equal(assemblePayload(issue('```acceptBlock\n{不再是 JSON}\n```'), CONFIG, {}), null);
+  assert.equal(assemblePayload(issue('```acceptBlock\n{無効な JSON}\n```'), CONFIG, {}), null);
   assert.equal(assemblePayload(issue('```acceptBlock\n[]\n```'), CONFIG, {}), null);
   assert.equal(assemblePayload(issue('```acceptBlock\n{"accept":"A1"}\n```'), CONFIG, {}), null);
   assert.equal(
@@ -75,7 +75,7 @@ test('fence 複数時は先頭のみ読む (規約は 1 つ置く MUST)', () => 
   assert.ok(!p.payloadText.includes('later/'));
 });
 
-test('contextBudget 間引き: 参照条項を優先落として acceptBlock・scope は保持 (spec §6)', () => {
+test('contextBudget 間引き: 参照条項を優先的に除外して acceptBlock・scope は保持 (spec §6)', () => {
   const longClause = 'A'.repeat(500);
   const clauses = {
     'spec §4.3': longClause,
@@ -101,7 +101,7 @@ test('contextBudget 間引き: 参照条項を優先落として acceptBlock・s
   assert.deepEqual(p.refs, ['spec §4.3', 'spec §5']);
 });
 
-test('間引き第二段階: 予算が小さいと参照条項 section ごと落とす (acceptBlock のみ残る)', () => {
+test('間引き第二段階: 予算が小さいと参照条項 section ごと除外する (acceptBlock のみ残る)', () => {
   const clauses = { 'spec §4.3': 'C'.repeat(400) };
   const p = assemblePayload(issue(FENCE(BLOCK)), { contextBudget: 75 }, clauses);
   assert.equal(p.trimmed, true);

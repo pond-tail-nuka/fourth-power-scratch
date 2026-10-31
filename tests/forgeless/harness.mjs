@@ -1,4 +1,4 @@
-// tests/forgeless/harness.mjs — forge ゼロテストハーネス (spec §11 mock bullet・§10 M5・人間行為自動テスト)。
+// tests/forgeless/harness.mjs — forge 依存ゼロテストハーネス (spec §11 mock bullet・§10 M5・人間行為自動テスト)。
 // src/forge.mjs (API adapter) と executor (bare repo git) を通さない: mockServer REST store が直接の正。
 // git は in-memory provider (branch→file map、sha=content hash) に置換し、checks は workDir を fs で再構築する。
 // orchestrator・gate・budget・runner・metrics は本物 (import そのまま)。human actor は REST 書き込み endpoint を

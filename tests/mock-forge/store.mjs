@@ -188,7 +188,7 @@ export function parseClaimBody(body) {
     markerSession: marker ? marker[1] : null,
     resumed: m[4] ?? null,
     kind: m[4] ? 'resume' : 'claim',
-    lineageIso: m[2], // 復元 comment でも元 claim の at が家系 (§7 resume lineage — 時刻はこれ, created_at は resume 時刻).
+    lineageIso: m[2], // 復元 comment でも元 claim の at がlineage (§7 resume lineage — 時刻はこれ, created_at は resume 時刻).
   };
 }
 
@@ -208,7 +208,7 @@ export function createdAtMatchesBodyAt(createdAt, body) {
   if (parsed.resumed !== null) {
     // 復元 comment (§7 resume lineage) — header の at は元 claim の created_at を保持し、
     // 自身 の created_at は resume 時刻 (後刻). 厳密一致では却下になってしまうため、
-    // 家系突合 (元 claim の created_at と一致は orchestrator 側) に委ね、
+    // lineage 突合 (元 claim の created_at と一致は orchestrator 側) に委ね、
     // 「at より前にはありえない」のみをここで検証する (§3 の偽装却下は保持: 未来時刻は弾く).
     return apiMs >= bodyMs;
   }
@@ -231,10 +231,10 @@ export function pickClaimWinner(claimNotes, windowStart) {
     const lineageMs = parsed.resumed !== null ? secondMs(parsed.lineageIso) : secondMs(n.createdAt);
     const createdMs = secondMs(n.createdAt);
     if (Number.isNaN(lineageMs)) continue;
-    if (startMs !== -Infinity && lineageMs < startMs) continue; // 窓は家系 (元 claim の at) で評価する
+    if (startMs !== -Infinity && lineageMs < startMs) continue; // 窓はlineage (元 claim の at) で評価する
     parsedNotes.push({ n, parsed, lineageMs, createdMs: Number.isNaN(createdMs) ? lineageMs : createdMs });
   }
-  // 復元 comment (resumed) は元 claim の家系証拠 — 元 claim が窓にいるなら元 claim 側で勝者を決める
+  // 復元 comment (resumed) は元 claim の lineage 証拠 — 元 claim が窓にいるなら元 claim 側で勝者を決める
   // (§3: created_at 先頭が勝者。復元 comment が後着として勝者を上書きしない)。
   const originals = parsedNotes.filter((c) => c.parsed.resumed === null);
   const candidates = originals.length > 0 ? originals : parsedNotes;

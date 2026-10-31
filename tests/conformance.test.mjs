@@ -78,7 +78,7 @@ function schemaErrors(events) {
 }
 
 // suite 骨格の scenario 定義 (録画 fixture × 台帳・決定表シナリオ)。
-// 期待ラベルは spec の正式名のみを突合 (GateLoop の行名は GateLoop fixture 側で固定 — conformance 側はラベル不変と遷移先のみ主張)。
+// 期待ラベルは spec の正式名のみを突合 (GateLoop の行名は GateLoop fixture 側で固定 — conformance 側はラベル不変と遷移先のみ検証)。
 // overAt: usage の turn 番号 → 台帳 over 期待値 (false は打ち切り前)。
 const SUITE = {
   'p1-green-implement.json': {
@@ -157,7 +157,7 @@ test('seat 録画 fixture = SUITE 網羅 (fixture 期待一致で網羅 — P1/P
   assert.deepEqual(names, [...Object.keys(SUITE)].sort(), 'P1/P2/P3 の録画 fixture が SUITE と一致');
 });
 
-test('しきい値 1: 録画 fixture の schema 遵守 ≥ 99% (決定論なので 100% が実質の下限、spec §6)', async () => {
+test('しきい値 1: 録画 fixture の schema 遵守率 ≥ 99% (決定論なので 100% が実質の下限、spec §6)', async () => {
   const names = await fixtureNames();
   const failures = [];
   for (const name of names) {
@@ -192,7 +192,7 @@ for (const [name, sc] of Object.entries(SUITE)) {
   });
 }
 
-test('しきい値 2: gate 拒否系 fixture の遵守 = 100% (spec §6)', async () => {
+test('しきい値 2: gate 拒否系 fixture の遵守率 = 100% (spec §6)', async () => {
   const rejects = Object.entries(SUITE).filter(([, sc]) => Object.values(sc.overAt).some((v) => v === true));
   assert.ok(rejects.length >= 1, '拒否系 fixture (budget 打ち切り群) が存在');
   for (const [name, sc] of rejects) {

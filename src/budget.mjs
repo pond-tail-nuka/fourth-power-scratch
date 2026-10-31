@@ -18,7 +18,7 @@ const DEFAULT_AGENTS = ['fourth-power-bot', 'orchestrator', 'fourth-power-runner
 
 /**
  * config の budget cap を §7 の式で使う正規名へ正規化する (§7: cost key は maxCostUsd のみ MUST。
- * 据え込み config.json の既定は maxCostUSD / maxTimeMin (分) / maxWallClockMin のため、ここで分→秒に換算する。
+ * 組み込み config.json の既定は maxCostUSD / maxTimeMin (分) / maxWallClockMin のため、ここで分→秒に換算する。
  * maxUsd は使用しない — §7 の key 名違反は throw). cap が無いまま unbounded MUST NOT (§6).
  * @param {{maxTurns: number, maxCostUsd?: number, maxCostUSD?: number, maxTimeSeconds?: number, maxTimeMin?: number, maxWallClockSeconds?: number, maxWallClockMin?: number}} cfg
  */
@@ -82,7 +82,7 @@ export function computeLedger(opts = {}, budgetCfg) {
     if (note.system === true) continue; // GitLab system note は台帳不算入 (§7)
     if (!agents.includes(note.author)) continue; // agent 著者 MUST (§7)
     const created = parseClaimTimeSafe(String(note.claimCreatedAt ?? note.createdAt));
-    if (created < claimTime) continue; // 台帳は勝者 claim から (§7。台帳開始の claim 行は claimCreatedAt で窓内化する)
+    if (created < claimTime) continue; // 台帳は勝者 claim から (§7。台帳開始の claim 行は claimCreatedAt でスキャン窓の対象に含める)
     if (!AGENT_COMMENT_RE.test(String(note.body ?? ''))) continue;
     const { session, verifier, forged } = sessionOfNote(note);
     if (verifier) continue; // verifier 別セッションは不算入 (§7)

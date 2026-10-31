@@ -30,7 +30,7 @@ const claimBody = (sess, at) => `claimed ${sess} at ${at}\n<!-- fp:session ${ses
 const turnBody = (sess, cost, sec, at) =>
   `submit <!-- fp:summary ${sess} --> budget: consumed_usd=${cost} consumed_seconds=${sec} at ${at} <!-- fp:session ${sess} -->`;
 const acceptBody = `x\n\`\`\`acceptBlock\n{"accept":[{"id":"A1","kind":"test","cmd":"node --test tests/a.test.mjs"}]}\n\`\`\`\n`;
-// §9 鎖定義 (parent link) を含む child 本文 (§5 テンプレート写し)。
+// §9 チェーン定義 (parent link) を含む child 本文 (§5 テンプレート写し)。
 const childBody = (parent) => acceptBody.replace('{"accept"', `{"parent":"issue #${parent}","accept"`);
 const mkStore = (parts) => ({ issues: [], prs: [], notes: [], checks: [], approvals: [], threads: [], ...parts });
 
@@ -126,11 +126,11 @@ test("interventions (a) re-triage, (b) accept edit, (d) plan close counted", () 
   assert.deepEqual(r.autonomy.interventions, { a: 2, b: 1, c: 0, d: 1, total: 4 });
   assert.deepEqual(r.autonomy.topicChain, { issues: 0, cleanDone: 0, rate: 0 }); // withdrawn chain excluded
 });
-test("retriage scoped by parent link: 別 topic の child・merge 完了 child は介入 (a) 不算入 (誤爆対)", () => {
+test("retriage scoped by parent link: 別 topic の child・merge 完了 child は介入 (a) 不算入 (誤検知対策)", () => {
   const store = mkStore({
     issues: [
       mkIssue(1, { body: "plan: topic", author: HUMAN, state: "closed" }), // topic A closed = 撤回
-      mkIssue(2, { author: BOT, body: childBody(1), state: "closed" }),    // A の child・未 merge close → (a)
+      mkIssue(2, { author: BOT, body: childBody(1), state: "closed" }),    // A の child・未マージ close → (a)
       mkIssue(3, { author: BOT, body: childBody(30), state: "closed", labels: ["done"] }), // B の child・PR merged → 完遂なので不算入
       mkIssue(30, { body: "plan: topic", author: HUMAN }), // topic B open (撤回でなし)
       mkIssue(31, { author: BOT, body: childBody(30), state: "closed" }), // B の child で B open → 撤回対象外
@@ -141,7 +141,7 @@ test("retriage scoped by parent link: 別 topic の child・merge 完了 child �
   assert.equal(r.autonomy.interventions.a, 1);
 });
 
-test("topic closed かつ全 child merge 済み = 鎖完遂 (撤回誤爆しない — P2 driver の終端形)", () => {
+test("topic closed かつ全 child マージ済み = チェーン完遂 (誤撤回しない — P2 driver の終端形)", () => {
   const store = mkStore({
     issues: [
       mkIssue(1, { body: "plan: topic", author: HUMAN, state: "closed", labels: ["done"] }),
@@ -154,7 +154,7 @@ test("topic closed かつ全 child merge 済み = 鎖完遂 (撤回誤爆しな�
     ],
   });
   const r = computeReport(store);
-  // plan PR merge は介入 d (§9 正当)。誤爆 a は 0、child merge 完遂なので a 加算なし。
+  // plan PR merge は介入 (d)(§9 正当)。介入 (a) の誤検知は 0、child merge 完遂なので a 加算なし。
   assert.deepEqual(r.autonomy.interventions, { a: 0, b: 0, c: 0, d: 1, total: 1 });
 });
 

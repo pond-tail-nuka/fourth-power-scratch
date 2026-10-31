@@ -1,4 +1,4 @@
-// Orchestrator ループ (spec §7: scan→claim→turn→submit、§5 plan turn/child Issue 機械組立、
+// Orchestrator ループ (spec §7: scan→claim→turn→submit、§5 plan turn/child Issue 組立、
 // §8 merge 直前再照合、§3 done→close 順序・claim 勝者継承). forge/seat/payload は DI で注入する
 // (他モジュールを直接 import しない — contract §9。テストはモック注入で決定論に走る)。
 
@@ -45,7 +45,7 @@ function prStateOf(pr) {
   return 'ready';
 }
 
-/** canonical issuer の check 投稿のみ数える (非 canonical は無視、§8). head SHA の投稿のみ (§8 stale 再照合). requiredNames 指定時は欠落 check を pending とみなす (§7 — 決定表が submit に誤爆しない)。 */
+/** canonical issuer の check 投稿のみ数える (非 canonical は無視、§8). head SHA の投稿のみ (§8 stale 再照合). requiredNames 指定時は欠落 check を pending とみなす (§7 — 決定表が submit に誤判定しない)。 */
 export function ciStateOf(checks, headSha, botActor, requiredNames = null) {
   const mine = (checks ?? []).filter((c) => (c.issuer === botActor || c.issuer === 'adapter') && (!headSha || c.headSha === headSha));
   if (mine.length === 0) return 'none';
@@ -84,7 +84,7 @@ export async function writeClaim(forge, issueId, sessionId, opts = {}) {
     const created = await forge.commentCreatedAt(noteId);
     if (created && created !== at) {
       // 書き直しは新 comment のみ (§3 edit 不可)。§7 の再 claim 書式 `at <元 created_at> resumed <iso>` を使う —
-      // 突合は「note list に現れた created_at の家系集合」側で元 comment の created_at を許容するため
+      // 突合は「note list に現れた created_at の lineage 集合」側で元 comment の created_at を許容するため
       // 新旧ともに却下され勝者不在になることはない (単なる clock peek 写しでは新 comment 自身の
       // created_at と厳密突合して両方偽装扱いになる — claims.mjs 参照)。同一 session-id なので新 id 不算入 (§7)。
       const rewrite = await forge.postComment(issueId, resumeClaimBody(
@@ -183,7 +183,7 @@ export async function runTurnAll(seat, turnReq, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// orchestrator 工厂 (forge / seat / payload は DI 注入。他モジュールの直接 import はしない、contract §9)
+// orchestrator ファクトリ (forge / seat / payload は DI 注入。他モジュールの直接 import はしない、contract §9)
 // ---------------------------------------------------------------------------
 
 /**
@@ -212,7 +212,7 @@ export function createOrchestrator(deps) {
     if (!label.startsWith('blocked/')) throw new Error('blockIssue は理由付き blocked/* ラベルのみ許容 (§6)');
     const cfg = config ?? await readConfig();
     const v = applyLabelAction({ add: [label], blockAction: true, reason: reason ?? '' }, cfg);
-    if (!v.ok) throw new Error(`blockIssue は白名簿 blocked/*・理由付き MUST (§6): ${v.reason}`);
+    if (!v.ok) throw new Error(`blockIssue は許可リスト blocked/*・理由付き MUST (§6): ${v.reason}`);
     for (const l of stateLabels(issue.labels)) {
       if (l !== label) await forge.removeLabel(issue.id, l);
     }
@@ -271,7 +271,7 @@ export function createOrchestrator(deps) {
         const add = a.add == null ? [] : Array.isArray(a.add) ? a.add : [a.add];
         const remove = a.remove == null ? [] : Array.isArray(a.remove) ? a.remove : [a.remove];
         const res = applyLabelAction({ add, remove, sessionId, winnerSessionId: sessionId }, config);
-        if (!res.ok) return 1; // exempt・privileged・白名簿外は全拒否 (§4.2 §8)
+        if (!res.ok) return 1; // exempt・privileged・許可リスト外は全拒否 (§4.2 §8)
         for (const l of res.remove) await forge.removeLabel(issue.id, l);
         for (const l of res.add) await forge.setLabel(issue.id, l);
         return 0;
@@ -425,8 +425,8 @@ export function createOrchestrator(deps) {
   }
 
   /**
-   * plan turn 起動は決定論 (§7: scan が plan: header を読む)。plan PR マージ後の child Issue 機械組立起票 (§5):
-   * author=botActor、本文は plan PR 差分からの機械組立 (acceptBlock のみ・自由文なし)。plan PR merge/close は人間判断 (§9 介入 (d)) — loop は merge 成立後の起票のみ。
+   * plan turn 起動は決定論 (§7: scan が plan: header を読む)。plan PR マージ後の child Issue 組立起票 (§5):
+   * author=botActor、本文は plan PR 差分からの組立 (acceptBlock のみ・自由文なし)。plan PR merge/close は人間判断 (§9 介入 (d)) — loop は マージ成立後の起票のみ。
    */
   async function runPlan(issue, config, opts = {}) {
     const payloadText = payload ? await payload.assemblePayload(issue, config, clausesOf(issue)) : assembleFallback(issue, config);
@@ -445,7 +445,7 @@ export function createOrchestrator(deps) {
     return { transition: 'plan', turn: 'plan', labels: stateLabels(issue.labels), sessionId: res.sessionId, usage: res.usage, timedOut: res.timedOut };
   }
 
-  /** child Issue 機械組立 (§5 固定テンプレート: spec 条項参照・accept:<id>・scope 宣言のみ。自由文を本文に MUST NOT). */
+  /** child Issue 組立 (§5 固定テンプレート: spec 条項参照・accept:<id>・scope 宣言のみ。自由文を本文に MUST NOT). */
   async function assembleChildrenAfterPlanMerge(issue, config) {
     const prs = await forge.prsForIssue(issue.repo, issue.number, { state: 'all' });
     // §5 冪等化: 再実行で child が無限増殖しないよう既存 bot Issue の title を突合して skip する。
@@ -502,12 +502,12 @@ export function extractPlanChildren(text) {
   return children;
 }
 
-/** child Issue 本文の機械組立 (§5 固定テンプレート: accept:<id> 参照・scope・条項参照のみ). */
+/** child Issue 本文の組立 (§5 固定テンプレート: accept:<id> 参照・scope・条項参照のみ). */
 export function childIssueBody(child, parentNumber = null) {
   const acceptLines = child.accept.map((a) => `accept: ${a.id}`);
   const refLines = child.refs.map((r) => `spec ${r.replace(/^spec\s+/, '')}`);
   const fenceJson = { accept: child.accept, scope: child.scope, refs: child.refs };
-  // 家系 link (§9 鎖定義・§5 撤回判定は parent link で限定 — 無関係な closed child を踏まない)。
+  // lineage link (§9 チェーン定義・§5 撤回判定は parent link で限定 — 無関係な closed child を踏まない)。
   if (parentNumber !== null && parentNumber !== undefined) fenceJson.parent = `issue #${parentNumber}`;
   const fence = JSON.stringify(fenceJson);
   const body = [...acceptLines, ...refLines, '```acceptBlock', fence, '```'].join('\n');

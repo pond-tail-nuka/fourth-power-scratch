@@ -125,17 +125,17 @@ test('recheck は canonical issuer の check 投稿のみ数える (非 canonica
   assert.equal(r.ok, false, 'canonical の failure は無視できない');
 });
 
-test('ラベル作用: exempt・privileged・白名簿外は全拒否、勝者 session-id の操作のみ (spec §4.2 §8 §2.6、M2(c))', () => {
+test('ラベル作用: exempt・privileged・許可リスト外は全拒否、勝者 session-id の操作のみ (spec §4.2 §8 §2.6、M2(c))', () => {
   const cfg = { humanAccounts: [human], botActor: 'fourth-power-bot', exemptLabels: ['exempt:ci', 'exempt:docs'], privilegedLabels: ['privileged:merge'] };
   assert.equal(validateLabelAction({ add: ['exempt:ci'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false);
   assert.equal(validateLabelAction({ add: ['privileged:merge'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false);
   assert.equal(validateLabelAction({ add: ['closes-pipeline'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false);
   assert.equal(validateLabelAction({ add: ['blocked/secret'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false);
-  // blockAction (blockIssue・理由付き) は白名簿 blocked/* のみ通る (§6)
+  // blockAction (blockIssue・理由付き) は許可リスト blocked/* のみ通る (§6)
   assert.equal(validateLabelAction({ blockAction: true, add: ['blocked/secret'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false, 'blockAction に理由が無ければ却下 (§6)');
   assert.equal(validateLabelAction({ blockAction: true, reason: 'budget cap 超過', add: ['blocked/budget'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, true);
   assert.equal(validateLabelAction({ blockAction: true, reason: 'x', add: ['exempt:ci'], sessionId: 's1', winnerSessionId: 's1' }, cfg).ok, false, 'blockAction でも exempt 付与は不可 (M2(c): accept author の exempt 利得経路を塞ぐ)');
-  // 非勝者 (他セッション) の作用は却下 (§8 介入境界)
+  // 敗者 (他セッション) の作用は却下 (§8 介入境界)
   assert.equal(validateLabelAction({ add: ['in_review'], sessionId: 'sX', winnerSessionId: 'sW' }, cfg).ok, false);
   assert.equal(validateLabelAction({ add: ['in_review'], sessionId: 'sW', winnerSessionId: 'sW' }, cfg).ok, true);
   const res = applyLabelAction({ add: ['in_review'], remove: ['claimed'], sessionId: 'sW', winnerSessionId: 'sW' }, cfg);

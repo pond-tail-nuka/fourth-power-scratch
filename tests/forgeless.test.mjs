@@ -1,4 +1,4 @@
-// tests/forgeless.test.mjs — MR/Issue 挙動の forge ゼロテスト + 人間に期待する挙動の自動テスト (harness.mjs 参照)。
+// tests/forgeless.test.mjs — MR/Issue 挙動の forge 依存ゼロテスト + 人間に期待する挙動の自動テスト (harness.mjs 参照)。
 // src/forge.mjs も executor の bare repo git も通さない (spec §11 mock bullet: 同一 code path の制約は harness 側で再現)。
 // orchestrator 本体は本物 — 人間動作 (承認・マージ判断・re-triage・thread 解決・条項 comment) を REST 経由で自動化し、
 // 期待挙動と逸脱 (§8 stale 承認・§3 Closes keyword・protection・§9 介入分類) を検出する。
@@ -34,7 +34,7 @@ function greenBranch(h, issue) {
   return h.forge.createPR({ repo: REPO, head: branchName(issue.number, issue.title), base: 'main', title: `agent: issue #${issue.number}`, body: `squash(#${issue.number})\nrefs: spec §2.1 accept:A1`, draft: true });
 }
 
-test('期待する人間挙動: head SHA 承認 → merge 成立と done/close (§8・§3 順序)', async () => {
+test('期待する人間挙動: head SHA 承認 → マージ成立と done/close (§8・§3 順序)', async () => {
   const { h } = makeHarness();
   const issue = mkP1Issue(h);
   await h.claimAndLabel(issue, 'sess-fl-p1-01');
@@ -109,7 +109,7 @@ test('期待する人間挙動: unresolved thread → red; 人間が thread 解�
   assert.equal((await h.orchestrator.runIssue(h.forge.issue(issue.id))).transition, 'merged');
 });
 
-test('期待する人間挙動: plan PR の承認→マージ = 介入 (d) → child 機械組立 (§5・§9)', async () => {
+test('期待する人間挙動: plan PR の承認→マージ = 介入 (d) → child 組立 (§5・§9)', async () => {
   const { h, setFixture } = makeHarness({ fixture: 'p2-plan.json' });
   const topic = parseTopic('P2.md');
   const issue = h.forge.draftIssue({ repo: REPO, title: topic.front.title ?? 'P2 お題', body: topic.body, labels: ['backlog'], author: h.human.reviewer });
@@ -136,7 +136,7 @@ test('期待する人間挙動: plan PR の承認→マージ = 介入 (d) → c
     assert.ok(child.labels.includes('backlog'));
     assert.ok(hasAcceptClauses(child.body));
   }
-  assert.ok(h.forge.issue(created[0].noteId).body.includes(`"parent":"issue #${issue.number}"`), '§9 鎖定義: child に parent link');
+  assert.ok(h.forge.issue(created[0].noteId).body.includes(`"parent":"issue #${issue.number}"`), '§9 チェーン定義: child に parent link');
   assert.deepEqual(await h.orchestrator.assembleChildrenAfterPlanMerge(h.forge.issue(issue.id), h.config), [], '§5 冪等化: 再実行で child を重複起票しない');
   assert.ok(h.forge.issue(created[0].noteId).body.includes('accept: A21-A'));
   setFixture('p2-child-implement.json');
@@ -161,7 +161,7 @@ test('期待する人間挙動: plan PR の承認→マージ = 介入 (d) → c
   assert.equal(rep.autonomy.topicChain.rate, 1);
 });
 
-test('人間逸脱: bot 勘定 の承認 (§8 人間承認に不算入) → high tier red・マージ不可', async () => {
+test('人間逸脱: bot アアカウント の承認 (§8 人間承認に不算入) → high tier red・マージ不可', async () => {
   const { h } = makeHarness();
   const issue = mkP1Issue(h);
   await h.claimAndLabel(issue, 'sess-fl-bot-01');
@@ -210,7 +210,7 @@ test('人間挙動: topic re-triage → child close は介入 (a) 計上 (§9 �
   assert.equal(rep.autonomy.interventions.total, 1);
 });
 
-test('人間逸脱: protection は commit_method を問わず効く — red/未承認 PR は merge/rebase でも阻止 (迂回対, §2 invariant 4)', async () => {
+test('人間逸脱: protection は commit_method を問わず効く — red/未承認 PR は merge/rebase でも阻止 (迂回対策, §2 invariant 4)', async () => {
   const { h } = makeHarness();
   const issue = mkP1Issue(h);
   await h.claimAndLabel(issue, 'sess-fl-bypass-01');
@@ -227,7 +227,7 @@ test('人間逸脱: protection は commit_method を問わず効く — red/未�
   assert.equal(h.forge.prJson(pr.id).merged_at !== null || h.forge.prsForIssue(REPO, issue.number, { state: 'all' }).some((p) => p.state === 'merged'), true);
 });
 
-test('required check 欠落は pending — 決定表が submit に誤爆せずマージしない (§7)', async () => {
+test('required check 欠落は pending — 決定表が submit に誤判定せずマージしない (§7)', async () => {
   const { h } = makeHarness();
   const issue = mkP1Issue(h);
   await h.claimAndLabel(issue, 'sess-fl-missing-01');
@@ -241,7 +241,7 @@ test('required check 欠落は pending — 決定表が submit に誤爆せず�
   assert.notEqual(h.forge.prJson(pr.id).state, 'merged');
 });
 
-test('unit: ciStateOf は required 欠落を pending とみなす (green 誤爆しない、§7 §8)', () => {
+test('unit: ciStateOf は required 欠落を pending とみなす (green 誤判定しない、§7 §8)', () => {
   const single = [{ name: 'accept', state: 'success', headSha: 'h1', issuer: 'fourth-power-bot' }];
   assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', ['fourth-power-accept', 'accept']), 'pending');
   assert.equal(ciStateOf(single, 'h1', 'fourth-power-bot', ['accept']), 'green');
@@ -249,7 +249,7 @@ test('unit: ciStateOf は required 欠落を pending とみなす (green 誤爆�
   assert.equal(ciStateOf([...single, { name: 'fourth-power-accept', state: 'failure', headSha: 'h1', issuer: 'fourth-power-bot' }], 'h1', 'fourth-power-bot', ['fourth-power-accept', 'accept']), 'red');
 });
 
-test('unit: writeClaim 遅れ fallback — 新旧ともに却下で勝者不在にしない (§7 resume header で家系突合を通す)', async () => {
+test('unit: writeClaim 遅れ fallback — 新旧ともに却下で勝者不在にしない (§7 resume header で lineage 突合を通す)', async () => {
   // 実 GitHub の遅れ境界跨ぎ偽装: 書き込みごとに created_at が 1 秒進む (advance-before-assign) forge。
   let ms = Date.parse('2026-01-01T00:00:00Z');
   const clock = () => new Date(ms).toISOString();

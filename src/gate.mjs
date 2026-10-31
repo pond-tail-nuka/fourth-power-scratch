@@ -88,13 +88,13 @@ export function decide(input = {}) {
   return { labels: ['in_review'], turn: 'submit', prState, exclusiveConflict: false, reason: 'green + tier 要求承認未充足 → submit turn (review 依頼のみ、mergePr 不可、§7)' };
 }
 
-// --- ラベル白名簿・PR 本文 scan (spec §4.3 §8) ---
+// --- ラベル許可リスト・PR 本文 scan (spec §4.3 §8) ---
 
-/** 白名簿: 状態ラベルのみ (exempt・権限ラベルは §2.6 由来の config で拒否される). */
+/** 許可リスト: 状態ラベルのみ (exempt・権限ラベルは §2.6 由来の config で拒否される). */
 export const STATE_LABELS_SET = STATE_LABELS;
 
 /**
- * gate のラベル Action 判定 (spec §8 白名簿 MUST).
+ * gate のラベル Action 判定 (spec §8 許可リスト MUST).
  * - exempt・privileged ラベル (config の exemptLabels / privilegedLabels、§2.6) への Action は MUST 全拒否
  *   (実装セッションの self 付与・accept-author exempt 利得の経路を塞ぐ、§4.2 M2(c))
  * - 他 session の operation は loop.mjs 側 (claims.inheritsWinner) で弾く (介入境界)
@@ -106,8 +106,8 @@ export function validateLabelAction(action = {}, config = {}) {
   const state = [...(action.add ?? []), ...(action.remove ?? [])];
   const block = action.blockAction === true;
   for (const label of state) {
-    if (exempt.includes(label) || privileged.includes(label)) return { ok: false, reason: `exempt・権限ラベルへの Action は全拒否 (§8 白名簿): ${label}` };
-    if (!STATE_LABELS.includes(label)) return { ok: false, reason: `状態ラベル白名簿外は拒否 (§8 白名簿): ${label}` };
+    if (exempt.includes(label) || privileged.includes(label)) return { ok: false, reason: `exempt・権限ラベルへの Action は全拒否 (§8 許可リスト): ${label}` };
+    if (!STATE_LABELS.includes(label)) return { ok: false, reason: `状態ラベル許可リスト外は拒否 (§8 許可リスト): ${label}` };
     if (BLOCKED.includes(label) && !(block && action.reason)) return { ok: false, reason: 'blocked ラベルは blockIssue (reason 付き) 経由のみ (§6 blockIssue 制約)' };
   }
   if (action.sessionId && action.winnerSessionId && action.sessionId !== action.winnerSessionId) {

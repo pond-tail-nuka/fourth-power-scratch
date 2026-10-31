@@ -11,7 +11,7 @@ const BRANCH_RE = /^llm\/issue-\d+-.+$/;
 /**
  * ISO 時刻を決定論の比較キーへ正規化する (エポック ms、秒未満を含む).
  * @param {string} iso
- * @returns {number} NaN (不正時は调用側が reject する).
+ * @returns {number} NaN (不正時は呼び出し側が reject する).
  */
 export function parseClaimTime(iso) {
   const ms = Date.parse(iso);
@@ -69,11 +69,11 @@ const lineageSeconds = new Set();
     if (marker && marker[1] !== sessionId) rejectReason = 'fp:session と可視 header の session-id が不一致 (§12)';
     if (!atIso) rejectReason = '可視 header に `at <iso-time>` が無い (§7 の固定書式)';
     else if (resumed ? !lineageSeconds.has(Math.floor(parseClaimTime(atIso) / 1000) * 1000) : floorSecond(atIso) !== floorSecond(String(note.createdAt))) {
-      rejectReason = 'at の時刻が created_at (または元 claim の created_at 家系) と不一致 (偽装 claim、§3・M2(o))';
+      rejectReason = 'at の時刻が created_at (または元 claim の created_at lineage) と不一致 (偽装 claim、§3・M2(o))';
     }
     if (!rejectReason && opts.windowStart) {
       const ws = parseClaimTime(opts.windowStart);
-      if (created < ws) rejectReason = 'scan 窓外 (再 triage 前の旧 claim は勝者候補から除外、§3(d))';
+      if (created < ws) rejectReason = 'スキャン窓の対象外 (再 triage 前の旧 claim は勝者候補から除外、§3(d))';
     }
     if (!rejectReason && opts.headBranch && !BRANCH_RE.test(opts.headBranch)) {
       rejectReason = 'branch 命名規約 (`llm/issue-<N>-<slug>`) に違反する claim 参照 branch (§7)';

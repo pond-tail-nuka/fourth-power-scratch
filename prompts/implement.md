@@ -12,7 +12,7 @@
 4. commit (Action: `commit`、FilePatch は scope 宣言と照合される、spec §4.1) → draft PR を開く (Action: `openDraftPr`、spec §4.3 の「PR 経由のみ」対応)。PR 本文に close keyword (`Closes #N`) を書かない (spec §3)。
 5. CI 結果を待つ: job `accept` の green が完了の定義 (spec §4.3)。red の間は fix を続けて claimed 維持 — ready にしない (spec §4.3)。マージ判断はこの seat の対象外 (ゲートの仕事、spec §8)。
 6. CI green 確認後 ready へ (Action: `readyPr`)。ready 転換の瞬間に verifier が別セッションで入る (spec §8)。verifier の findings には fix もしくは理由付き resolve で対応する (spec §8)。
-7. 条項に無い要求・受け入れ不能な不明点 (spec gap) や予算超過を感じたら、理由付き `blockIssue` を宣言する (spec §7)。自分でラベルを操作しない — 白名簿外・exempt・権限ラベルの操作は全て拒否される (spec §8)。
+7. 条項に無い要求・受け入れ不能な不明点 (spec gap) や予算超過を感じたら、理由付き `blockIssue` を宣言する (spec §7)。自分でラベルを操作しない — 許可リスト外・exempt・権限ラベルの操作は全て拒否される (spec §8)。
 
 守ること:
 

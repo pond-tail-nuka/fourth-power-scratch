@@ -1,5 +1,5 @@
 // src/seat.mjs — seat adapter (spec §6・§7・contract §4)。cli: agy (live) / stub (録画)。
-// 夜間の実測は agy gemini-3.8-flash を使用可 (user 承認 2026-10-31)。heterogen 階層: low=flash、high=claude (config modelMap)。
+// 夜間の実測は agy gemini-3.8-flash を使用可 (user 承認 2026-10-31)。heterogeneous 階層: low=flash、high=claude (config modelMap)。
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -26,7 +26,7 @@ if (json) process.stdout.write(JSON.stringify(projection));
 else process.stdout.write('fp-status-table\\nmock/fourth_power 1 backlog\\n');
 `;
 
-export const A21_A = `// ci/accept/a21-a.test.mjs — A21-A (child 機械組立 accept 本体 — plan PR 起票済み・改変禁止)。
+export const A21_A = `// ci/accept/a21-a.test.mjs — A21-A (child 組立 accept 本体 — plan PR 起票済み・改変禁止)。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -101,7 +101,7 @@ export function fenceOf(body) {
   return m ? m[1].trim() : null;
 }
 
-/** plan PR 起算の child entry 節テキスト (§5 機械組立 — perform driver と forgeless suite の共通生成)。 */
+/** plan PR 起算の child entry 節テキスト (§5 組立 — perform driver と forgeless suite の共通生成)。 */
 export function childSectionText(children) {
   return children.map((c) => `#### child issue: ${c.title}\nspec ${c.refs.join(' ')}\naccept: ${c.id}\n\`\`\`acceptBlock\n${JSON.stringify({ accept: [{ id: c.id, kind: 'test', cmd: c.cmd }], scope: c.scope, refs: c.refs })}\n\`\`\``).join('\n\n');
 }
