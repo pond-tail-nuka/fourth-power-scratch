@@ -76,7 +76,16 @@ export function seedFramework(baseDir = GOVERNANCE_DIR) {
   store.repoEnsure(FRAMEWORK_REPO);
   for (const file of ['config.json', 'projects.json']) {
     try {
-      store.contentsSet(FRAMEWORK_REPO, `docs/governance/${file}`, readFileSync(path.join(baseDir, file), 'utf8'));
+      let text = readFileSync(path.join(baseDir, file), 'utf8');
+      // mock contents 写し: provider は mock に固定する (§11 — 本番 binding (config の provider) を
+      // mock 側へ写しても provider だけ上書き。readConfig/activeProviderName の mock 自己完結検証は
+      // 写し provider を期待する)。
+      if (file === 'config.json') {
+        const cfg = JSON.parse(text);
+        cfg.provider = 'mock';
+        text = `${JSON.stringify(cfg, null, 2)}\n`;
+      }
+      store.contentsSet(FRAMEWORK_REPO, `docs/governance/${file}`, text);
     } catch {
       // 欠損は許容 (fixture 側で seed する).
     }

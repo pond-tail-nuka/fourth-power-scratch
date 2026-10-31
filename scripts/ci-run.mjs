@@ -21,12 +21,16 @@ function changedFiles() {
 const headSha = execSync('git rev-parse HEAD', { cwd: ROOT }).toString().trim();
 
 const checks = [
-  { name: 'accept', cmd: 'node --test tests/' },
+  // runner の checks 引数は check 名文字列 (§4.1 — cmd は acceptBlock 側に入っており、名前の object ではない)。
+  // framework 本体 dogfood の accept job = 本番 unit 群 (npm test の glob — tests/*.test.mjs のみ。
+  // tests/perform/topics/fixtures/ の accept-first 赤 (P1 対象 scripts/status.mjs は framework 本体に
+  // 存在しない — scratch 専用) は数えない、§4.5。accept-vacuity は file cmd 前提の fail-closed check なので
+  // framework 本体 (ci/accept 無し) では対象なし — scratch PR 側で測る (framework の required は accept job のみ))。
+  { name: 'accept', cmd: 'npm test' },
   { name: 'no-state' },
-  { name: 'accept-vacuity' },
-];
-const acceptBlock = { accept: [{ id: 'A1', kind: 'test', cmd: 'node --test tests/' }], scope: ['src/**', 'tests/**', 'docs/**'], refs: ['spec §10'] };
-const results = await runChecks({ checks, workDir: ROOT, acceptBlock, meta: { prHeadSha: headSha, changedFiles: changedFiles(), config } });
+].map((c) => c.name);
+const acceptBlock = { accept: [{ id: 'A1', kind: 'test', cmd: 'npm test' }], scope: ['src/**', 'tests/**', 'docs/**'], refs: ['spec §10'] };
+const results = await runChecks({ checks, workDir: ROOT, acceptBlock, meta: { prHeadSha: headSha, changedPaths: changedFiles(), frameworkConfig: config } });
 for (const c of results) {
   console.log(`${c.name}: ${c.state}`);
   if (c.state === 'failure') console.error(c.detail || '');

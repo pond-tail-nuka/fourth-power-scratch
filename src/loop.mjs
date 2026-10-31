@@ -389,8 +389,16 @@ export function createOrchestrator(deps) {
           const prs = await forge.prsForIssue(issue.repo, issue.number);
           const pr = prs[0];
           if (!pr) return { ...base, transition: 'gate-deny', reason: 'PR が無い (§7)' };
+          // GitHub の mergeable_state は非同期計算 (GET 直後は null → 遅延で true/false に埋まる、§8 の
+          // mergeable 再照合 MUST に従い prJson を読み直して確定を待つ — mock は即値で素通し)。
+          let fresh = pr;
+          for (let i = 0; i < 6 && fresh.mergeable !== true && fresh.mergeable !== false; i++) {
+            if (i > 0) await new Promise((r) => setTimeout(r, 500));
+            const raw = await forge.prJson(pr.id);
+            if (raw?.mergeable !== undefined && raw?.mergeable !== null) fresh = { ...fresh, mergeable: raw.mergeable };
+          }
           const snapshot = async () => ({
-            issueId: issue.id, prId: pr.id, headSha: pr.headSha, prState: pr.state, mergeable: pr.mergeable,
+            issueId: issue.id, prId: pr.id, headSha: pr.headSha, prState: pr.state, mergeable: fresh.mergeable ?? null,
             labels: (await forge.issue(issue.id)).labels,
             checks: await forge.checks(pr.id), approvals: await forge.approvals(pr.id),
             threads: await forge.threads(pr.id), protection: await forge.protection(issue.repo),

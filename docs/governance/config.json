@@ -21,6 +21,7 @@
   "requiredChecks": ["accept","accept-immutable","accept-vacuity","risk-tier","review-threads","status-exclusivity","sha-approval","config-consistency","scope-guard","no-state","peer-query-reingestion"],
   "planBudgetMaxTurns": 2,
   "tiers": {"highPaths": ["docs/spec.md","src/gate.mjs","src/forge.mjs","scripts/bootstrap.mjs","docs/governance/"], "mediumPaths": ["src/"], "lowPaths": ["tests/","docs/PROPOSAL.md","prompts/"]},
-  "provider": "mock",
+  "provider": "github",
+  "frameworkRepo": "pond-tail-nuka/fourth_power",
   "restoreScan": {"activeLabels": ["claimed","in_review","rebase_required"]}
 }

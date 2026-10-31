@@ -320,12 +320,29 @@ export function notes(id) {
   return (raw ?? []).map((n) => normalizeNote(n));
 }
 
-/** PR head の check 状態 (§7 の決定表入力 — 決定表は gate の再照合と同一の読み、§8). */
+/** PR head の check 状態 (§7 の決定表入力 — 決定表は gate の再照合と同一の読み、§8).
+ * github では legacy status も合わせる: postCheck (github) は status API に投稿するので combined status も読む
+ * (description の `fp:issuer=` tag から canonical issuer を復元する、§8 正規化の写し). */
 export function checks(prId) {
   const p = parseId(prId, 'pr');
   const sha = branchSha(prId);
   const raw = api().get(`repos/${p.repo}/commits/${sha}/check-runs`);
-  return (raw?.check_runs ?? []).map((c) => normalizeCheck(c));
+  const out = (raw?.check_runs ?? []).map((c) => normalizeCheck(c));
+  if (activeProviderName() === 'github') {
+    try {
+      const st = api().get(`repos/${p.repo}/commits/${sha}/status`);
+      for (const s of st?.statuses ?? []) {
+        const iss = /fp:issuer=(\S+)/.exec(String(s.description ?? ''))?.[1] ?? '';
+        out.push({
+          name: s.context,
+          state: s.status === 'success' ? 'success' : s.status === 'failure' ? 'failure' : 'pending',
+          headSha: s.sha ?? sha,
+          issuer: iss,
+        });
+      }
+    } catch { /* status 未投稿 — combined 404 は check なしとみなす (pending 側で担保、§7) */ }
+  }
+  return out;
 }
 
 /** approving review 記録 (tier 判定の承認記録は §8 の再照合で個別に読む、§11). */
@@ -357,6 +374,47 @@ export function protection(repo) {
   } catch {
     return normalizeProtection(null);
   }
+}
+
+/** 実行アカウントの確認 (§4.4 bootstrap の whoami 突合 — github は gh token の login, mock は人間 actor の写し). */
+export function whoami() {
+  if (activeProviderName() === 'mock') {
+    return { login: (readConfig().humanAccounts ?? [mock.BOT])[0] };
+  }
+  const raw = api().get('user');
+  return { login: raw?.login ?? '' };
+}
+
+/** bootstrap の label materialize (§4.4 — re-run 可: 既存は 409/422 を無視して成功とみなす). */
+export function ensureLabel(repo, label) {
+  const key = repo ?? defaultRepo();
+  try {
+    api().send('POST', `repos/${key}/labels`, undefined, { name: label, color: '5319e7', description: `fourth_power §1 ${label}` });
+    return true;
+  } catch (e) {
+    if (/status 4(09|22)|already exists/.test(String(e?.message ?? e))) return true;
+    throw e;
+  }
+}
+
+/** bootstrap の branch protection materialize (§4.4). github は PUT (enforce_admins は別 endpoint)、mock は POST で同一効果. */
+export function setProtection(repo, prot) {
+  const key = repo ?? defaultRepo();
+  const body = {
+    required_status_checks: { strict: true, contexts: prot.requiredChecks ?? [] },
+    required_pull_request_reviews: {
+      dismiss_stale_reviews: prot.dismissStaleReviews === true,
+      required_approving_review_count: prot.requiredApprovals ?? 0,
+    },
+    enforce_admins: prot.enforceAdmins === true,
+  };
+  if (activeProviderName() === 'mock') {
+    api().send('POST', `repos/${key}/branches/main/protection`, undefined, body);
+    return true;
+  }
+  api().send('PUT', `repos/${key}/branches/main/protection`, undefined, body);
+  api().send('PUT', `repos/${key}/branches/main/protection/enforce_admins`, undefined, {});
+  return true;
 }
 
 /** repo の label 定義一覧 (bootstrap の materialize 一覧 — config-consistency の突合対象, §8). */
@@ -439,11 +497,15 @@ export function closePR(prId) {
  * API 同期照合として mockServer 側で行う). gate 通過前拒否 (§6) は loop.mjs が merge 前に
  * decide/ggate を通すため、ここは protection + required checks + head SHA 再照合のみで守る.
  */
-export function mergePR(prId, method) {
+export function mergePR(prId, method, { adminOverride = false } = {}) {
   const p = parseId(prId, 'pr');
   const m = method ?? readConfig().mergeMethod ?? 'squash';
+  // adminOverride は GitHub の admin merge bypass と同じ効果 (enforce_admins OFF の repo で admin token の PUT merge が
+  // required check/review を bypass する — night proxy の人間介入、§9 不算入記録). 既定は protection 遵守のまま.
   const res = api().send('PUT', `${prPath(p)}/merge`, undefined, { commit_method: m });
-  if (!res || res.result !== 'success') {
+  // GitHub 本体は成功時に message-only の応答を返す (result 写しは mock の conformance 形状、§11)。
+  const ok = res && (res.result === 'success' || res.merged === true || (activeProviderName() === 'github' && res.message));
+  if (!ok) {
     throw new Error(`forge: mergePR ${p.repo}!${p.number} failed (gate 再照合 fail)`);
   }
   return { merged: true, mergeSha: res.merge?.sha ?? null };
@@ -521,10 +583,22 @@ export function resolveThread(prId, threadId, resolved = true) {
   return api().send('PATCH', `repos/${p.repo}/pulls/comments/${threadId}`, undefined, { resolved });
 }
 
-/** canonical bot 由来の check post (§8 issuer 正規化. executor の mockMerge 側も同一経路). */
+/** canonical bot 由来の check post (§8 issuer 正規化. executor の mockMerge 側も同一経路。
+ * github provider は legacy status API に投稿する (check-runs API は GitHub App token 専用で PAT では作れないため、
+ * 写しとして statuses に `fp:issuer=` tag を刻む — checks() が combined status から復元する、§8)。 */
 export function postCheck(prId, check, issuer) {
   const p = parseId(prId, 'pr');
   const head = branchSha(prId);
+  const iss = issuer ?? readConfig().botActor ?? mock.BOT;
+  if (activeProviderName() === 'github') {
+    const state = check.state === 'success' ? 'success' : check.state === 'failure' ? 'failure' : 'pending';
+    return api().send('POST', `repos/${p.repo}/statuses/${head}`, undefined, {
+      state,
+      context: check.name,
+      description: `fourth_power §8 fp:issuer=${iss}`,
+      target_url: `https://github.com/${p.repo}`,
+    });
+  }
   const conclusion = check.state === 'pending' ? null : check.state === 'success' ? 'success' : 'failure';
   return api().send(
     'POST',

@@ -18,7 +18,8 @@ function parseArgs(argv) {
   return { repo, checkOnly };
 }
 
-const REQUIRED_CHECKS = ['accept', 'accept-immutable', 'accept-vacuity', 'config-consistency', 'no-state', 'scope-guard', 'risk-tier', 'sha-approval', 'status-exclusivity'];
+// runner が投稿する full 一覧 (§8 required 8 種 + accept job + no-state + peer 再取込 — protection の required_status_checks と runner 投稿が名前一致する MUST、§4.4 §7 pending 担保)。config.requiredChecks と同一の正本は config 側だが、bootstrap は file から読むためここに写す (突合は config-consistency check と assert で担保)。
+const REQUIRED_CHECKS = ['accept', 'accept-immutable', 'accept-vacuity', 'risk-tier', 'review-threads', 'status-exclusivity', 'sha-approval', 'config-consistency', 'scope-guard', 'no-state', 'peer-query-reingestion'];
 
 async function main() {
   const { repo, checkOnly } = parseArgs(process.argv.slice(2));
