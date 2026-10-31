@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createForge } from '../src/forge.mjs';
+import * as forge from '../src/forge.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(join(ROOT, '..', 'docs', 'governance', 'config.json'), 'utf8'));
@@ -25,12 +25,12 @@ async function main() {
   const { repo, checkOnly } = parseArgs(process.argv.slice(2));
   if (!repo) throw new Error('--repo が必要');
   if (config.provider === 'mock') throw new Error('bootstrap は本番 provider のみ (mock では setup しない、spec §11)');
-  const forge = createForge({ provider: config.provider, config });
+  forge.configure({ provider: config.provider, config });
   if (!checkOnly) {
     for (const label of config.labels) await forge.ensureLabel(repo, label);
     await forge.setProtection(repo, {
       requiredChecks: REQUIRED_CHECKS,
-      requiredApprovals: 1,
+      requiredApprovals: config.requiredApprovals ?? 1, // §4.4 — 承認数の正本は config (M3 switch で 0 に切り、assert は同一源で一致する)
       dismissStaleReviews: true,
       enforceAdmins: true,
     });

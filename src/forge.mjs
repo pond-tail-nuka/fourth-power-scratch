@@ -392,12 +392,12 @@ export function ensureLabel(repo, label) {
     api().send('POST', `repos/${key}/labels`, undefined, { name: label, color: '5319e7', description: `fourth_power §1 ${label}` });
     return true;
   } catch (e) {
-    if (/status 4(09|22)|already exists/.test(String(e?.message ?? e))) return true;
+    if (/already_exists|HTTP 4(09|22)/.test(String(e?.message ?? e))) return true; // 既存・衝突は成功とみなす (§4.4 re-run 可 — 正本突合は repoLabels assert と config-consistency が担保)
     throw e;
   }
 }
 
-/** bootstrap の branch protection materialize (§4.4). github は PUT (enforce_admins は別 endpoint)、mock は POST で同一効果. */
+/** bootstrap の branch protection materialize (§4.4). github は legacy sub-endpoint (PUT 全体置換は restrictions 要求で 422 になるため個別張替)、mock は POST で同一効果. */
 export function setProtection(repo, prot) {
   const key = repo ?? defaultRepo();
   const body = {
@@ -412,8 +412,9 @@ export function setProtection(repo, prot) {
     api().send('POST', `repos/${key}/branches/main/protection`, undefined, body);
     return true;
   }
-  api().send('PUT', `repos/${key}/branches/main/protection`, undefined, body);
-  api().send('PUT', `repos/${key}/branches/main/protection/enforce_admins`, undefined, {});
+  // GitHub の PUT protection は全体置換スキーマで restrictions を MUST 要求 (§4.4 — legacy sub-endpoint は 404、
+  // restrictions: null を添えて単一 PUT で張る。GET 応答の enforce_admins も同 body で確立する)。
+  api().send('PUT', `repos/${key}/branches/main/protection`, undefined, { ...body, restrictions: null });
   return true;
 }
 
